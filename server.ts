@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as git from 'isomorphic-git';
+import type { Request, Response } from 'express';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,11 +22,23 @@ const VERSION_FILES = [
   path.join(__dirname, 'src', 'styles.css')
 ];
 
+type FileStat = { additions: number; deletions: number };
+type FileRow = { file: string; additions: number; deletions: number };
+type UntrackedRow = { file: string };
+type CommitRow = {
+  oid: string;
+  message: string;
+  ts: number;
+  additions: number;
+  deletions: number;
+  files: FileRow[];
+};
+
 if (fs.existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR));
 }
 
-async function safeCurrentBranch(dir) {
+async function safeCurrentBranch(dir: string): Promise<string> {
   try {
     return await git.currentBranch({ fs, dir, fullname: false }) || '(detached)';
   } catch {
@@ -33,7 +46,7 @@ async function safeCurrentBranch(dir) {
   }
 }
 
-async function listStateFiles(dir) {
+async function listStateFiles(dir: string): Promise<{ staged: FileRow[]; modified: FileRow[]; untracked: UntrackedRow[] }> {
   const matrix = await git.statusMatrix({ fs, dir });
   const staged = [];
   const modified = [];
@@ -60,8 +73,8 @@ async function listStateFiles(dir) {
   return { staged, modified, untracked };
 }
 
-function parseNumstat(raw) {
-  const stats = new Map();
+function parseNumstat(raw: string): Map<string, FileStat> {
+  const stats = new Map<string, FileStat>();
   const lines = raw.split('\n').filter(Boolean);
   for (const line of lines) {
     const parts = line.split('\t');
@@ -74,7 +87,7 @@ function parseNumstat(raw) {
   return stats;
 }
 
-async function getDiffNumstatMap(dir, args) {
+async function getDiffNumstatMap(dir: string, args: string[]): Promise<Map<string, FileStat>> {
   try {
     const { stdout } = await execFileAsync(GIT_BIN, args, { cwd: dir });
     return parseNumstat(stdout);
@@ -89,7 +102,7 @@ async function getDiffNumstatMap(dir, args) {
   }
 }
 
-async function getFileDiffStat(dir, file, cached = false) {
+async function getFileDiffStat(dir: string, file: string, cached = false): Promise<FileStat> {
   const args = ['diff'];
   if (cached) args.push('--cached');
   args.push('--numstat', '--', file);
@@ -102,7 +115,7 @@ async function getFileDiffStat(dir, file, cached = false) {
   return { additions: 0, deletions: 0 };
 }
 
-async function populateFileStats(dir, rows, cached = false) {
+async function populateFileStats(dir: string, rows: FileRow[], cached = false): Promise<void> {
   await Promise.all(
     rows.map(async (row) => {
       const stat = await getFileDiffStat(dir, row.file, cached);
@@ -112,7 +125,7 @@ async function populateFileStats(dir, rows, cached = false) {
   );
 }
 
-async function readRefOid(dir, ref) {
+async function readRefOid(dir: string, ref: string): Promise<string | null> {
   try {
     return await git.resolveRef({ fs, dir, ref });
   } catch {
@@ -120,7 +133,7 @@ async function readRefOid(dir, ref) {
   }
 }
 
-async function readCommitMap(dir, ref, depth = 300) {
+async function readCommitMap(dir: string, ref: string, depth = 300): Promise<Map<string, { idx: number; commit: any }>> {
   try {
     const commits = await git.log({ fs, dir, ref, depth });
     return new Map(commits.map((c, idx) => [c.oid, { idx, commit: c }]));
@@ -129,7 +142,7 @@ async function readCommitMap(dir, ref, depth = 300) {
   }
 }
 
-async function readCommits(dir, ref = 'HEAD', depth = MAX_COMMIT_ROWS) {
+async function readCommits(dir: string, ref = 'HEAD', depth = MAX_COMMIT_ROWS): Promise<any[]> {
   try {
     return await git.log({ fs, dir, ref, depth });
   } catch {
@@ -137,13 +150,13 @@ async function readCommits(dir, ref = 'HEAD', depth = MAX_COMMIT_ROWS) {
   }
 }
 
-function countUntilBase(map, baseOid) {
+function countUntilBase(map: Map<string, { idx: number; commit: any }>, baseOid: string | null): number {
   if (!baseOid) return 0;
   const base = map.get(baseOid);
   return base ? base.idx : 0;
 }
 
-function compactCommit(commit) {
+function compactCommit(commit: any): CommitRow {
   return {
     oid: commit.oid,
     message: (commit.commit.message || '').trim() || commit.oid.slice(0, 7),
@@ -154,11 +167,11 @@ function compactCommit(commit) {
   };
 }
 
-async function getCommitDiffStat(dir, oid) {
+async function getCommitDiffStat(dir: string, oid: string): Promise<{ additions: number; deletions: number; files: FileRow[] }> {
   const statMap = await getDiffNumstatMap(dir, ['show', '--numstat', '--format=', oid]);
   let additions = 0;
   let deletions = 0;
-  const files = [];
+  const files: FileRow[] = [];
   for (const stat of statMap.values()) {
     additions += stat.additions;
     deletions += stat.deletions;
@@ -169,7 +182,7 @@ async function getCommitDiffStat(dir, oid) {
   return { additions, deletions, files };
 }
 
-async function populateCommitStats(dir, commits) {
+async function populateCommitStats(dir: string, commits: CommitRow[]): Promise<void> {
   await Promise.all(
     commits.map(async (commit) => {
       const stat = await getCommitDiffStat(dir, commit.oid);
@@ -180,7 +193,13 @@ async function populateCommitStats(dir, commits) {
   );
 }
 
-async function getAheadBehind(dir, branch) {
+async function getAheadBehind(dir: string, branch: string): Promise<{
+  ahead: number;
+  behind: number;
+  aheadCommits: CommitRow[];
+  behindCommits: CommitRow[];
+  aheadMode: 'local' | 'upstream';
+}> {
   if (!branch || branch === '(detached)' || branch === '(unknown)') {
     return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [], aheadMode: 'upstream' };
   }
@@ -233,7 +252,13 @@ async function getAheadBehind(dir, branch) {
   return { ahead, behind, aheadCommits, behindCommits, aheadMode: 'upstream' };
 }
 
-async function getRepoState(dir) {
+async function getRepoState(dir: string): Promise<{
+  repository: string;
+  branch: string;
+  counts: { staged: number; modified: number; untracked: number; ahead: number; behind: number };
+  meta: { aheadMode: 'local' | 'upstream' };
+  details: { staged: FileRow[]; modified: FileRow[]; untracked: UntrackedRow[]; ahead: CommitRow[]; behind: CommitRow[] };
+}> {
   const repoName = path.basename(dir);
   const branch = await safeCurrentBranch(dir);
   const { staged, modified, untracked } = await listStateFiles(dir);
@@ -268,7 +293,7 @@ async function getRepoState(dir) {
   };
 }
 
-function getAssetVersion() {
+function getAssetVersion(): string {
   let maxMtimeMs = 0;
   for (const file of VERSION_FILES) {
     try {
@@ -279,11 +304,11 @@ function getAssetVersion() {
   return String(Math.floor(maxMtimeMs));
 }
 
-app.get('/api/version', (_req, res) => {
+app.get('/api/version', (_req: Request, res: Response) => {
   res.json({ version: getAssetVersion() });
 });
 
-app.get('/api/state', async (req, res) => {
+app.get('/api/state', async (req: Request, res: Response) => {
   const target = req.query.repo ? path.resolve(String(req.query.repo)) : DEFAULT_REPO;
   try {
     const state = await getRepoState(target);
@@ -293,7 +318,7 @@ app.get('/api/state', async (req, res) => {
   }
 });
 
-app.get('*', (_req, res) => {
+app.get('*', (_req: Request, res: Response) => {
   if (fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
     res.sendFile(path.join(DIST_DIR, 'index.html'));
     return;
