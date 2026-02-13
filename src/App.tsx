@@ -214,13 +214,24 @@ export default function App() {
   useEffect(() => {
     let active = true;
 
+    async function readJsonSafe<T>(res: Response): Promise<T> {
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(
+          `API returned non-JSON (${res.status}). ${text.startsWith('<') ? 'Backend route is not available in this deployment.' : text}`
+        );
+      }
+      return (await res.json()) as T;
+    }
+
     async function fetchState() {
       try {
         const res = await fetch('/api/state');
-        const body = await res.json();
+        const body = await readJsonSafe<{ error?: string } & RepoState>(res);
         if (!res.ok) throw new Error(body.error || 'failed');
         if (!active) return;
-        setState(body as RepoState);
+        setState(body);
         setError('');
       } catch (err) {
         if (!active) return;
@@ -247,6 +258,8 @@ export default function App() {
     async function checkVersion() {
       try {
         const res = await fetch('/api/version', { cache: 'no-store' });
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
         const body = (await res.json()) as { version?: string };
         if (!active || !body.version) return;
         setAssetVersion((prev) => {
