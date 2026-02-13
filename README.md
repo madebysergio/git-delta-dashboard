@@ -7,42 +7,44 @@ Minimal, delta-first dashboard for local Git repository state.
 Git Delta Dashboard is a lightweight web app that visualizes meaningful repository deltas without exposing terminal output directly in the UI.
 
 The interface is designed for quick scanning:
-- Only non-zero change groups are shown
+- Only non-zero change groups are shown (except staged/unstaged, which are always visible)
 - A single group can be expanded at a time
 - Expanded groups auto-collapse when their count resolves to zero
 
 ## Features
 
 - Live Git state API (`/api/state`) using `isomorphic-git`
+- Vite + React + TypeScript frontend
 - Delta counters for:
   - `staged`
-  - `modified`
+  - `unstaged`
   - `untracked`
-  - `ahead` (unpushed)
-  - `behind` (unpulled)
+  - `ahead/commits`
+  - `behind`
 - Expandable detail panes:
-  - file lists for staged/modified/untracked
-  - commit lists for ahead/behind
+  - file lists for staged/unstaged/untracked
+  - commit lists for ahead/behind with per-commit file mapping
 - Ignore-aware untracked counting (`git.isIgnored`)
-- Tailwind-based UI
 - Dark mode toggle with persisted preference (`localStorage`)
 
 ## Tech Stack
 
 - Node.js
-- Express
+- Express (API backend)
 - isomorphic-git
-- Tailwind CSS v4 (`@tailwindcss/cli`)
-- React frontend
+- React + TypeScript
+- Vite
+- Tailwind CSS (via Vite CSS import)
 
 ## Project Structure
 
-- `server.js` - Express server and Git state service
-- `public/index.html` - App shell
-- `public/main.js` - UI rendering and interactions
-- `public/styles.css` - Generated Tailwind output
-- `tailwind.css` - Tailwind input stylesheet
-- `.gitignore` - Ignore rules for dependencies and macOS artifacts
+- `server.js` - Express API server and Git state service
+- `src/App.tsx` - Dashboard UI
+- `src/main.tsx` - React entrypoint
+- `src/styles.css` - Tailwind import + dark variant
+- `src/types.ts` - UI data types
+- `vite.config.ts` - Vite config + API proxy
+- `tsconfig.json` - TypeScript config
 
 ## Requirements
 
@@ -55,74 +57,46 @@ The interface is designed for quick scanning:
 npm install
 ```
 
-## Run
+## Development
 
 ```bash
 npm run dev
 ```
 
-Open:
+This runs:
+- Express API on `http://localhost:4173`
+- Vite frontend on `http://localhost:5173` (with `/api` proxied to Express)
 
-```text
-http://localhost:4173
+## Production Build
+
+```bash
+npm run build
+npm run start
 ```
+
+- `npm run build` outputs frontend assets to `dist/`
+- `npm run start` serves API + built frontend via Express
 
 ## Scripts
 
-- `npm run build:css` - Generate `public/styles.css` from `tailwind.css`
-- `npm run dev` - Build CSS then start server
-- `npm run start` - Build CSS then start server
+- `npm run dev` - run API + Vite in parallel
+- `npm run dev:api` - run Express API server only
+- `npm run dev:web` - run Vite frontend only
+- `npm run build` - Vite production build
+- `npm run preview` - preview built Vite app
+- `npm run start` - run Express server (serves `dist` if present)
 
 ## API
 
 ### `GET /api/state`
 
-Returns a JSON payload:
+Returns repository state with counters and details.
 
-```json
-{
-  "repository": "git-delta-dashboard",
-  "branch": "main",
-  "counts": {
-    "staged": 0,
-    "modified": 0,
-    "untracked": 0,
-    "ahead": 0,
-    "behind": 0
-  },
-  "details": {
-    "staged": [],
-    "modified": [],
-    "untracked": [],
-    "ahead": [],
-    "behind": []
-  }
-}
-```
+### `GET /api/version`
 
-Optional query parameter:
-- `repo`: absolute or relative path to a target repository
-
-Example:
-
-```text
-/api/state?repo=/path/to/repo
-```
-
-## UI Behavior Rules
-
-- Show only non-zero counters
-- Click a counter to expand its section
-- Hide section when count reaches zero
-- Do not render full diffs or verbose logs
-
-## Dark Mode
-
-- Toggle button in header switches light/dark theme
-- Preference key: `git-dashboard-theme`
-- Defaults to system preference when no saved preference exists
+Returns a frontend asset version token used for auto-reload checks.
 
 ## Notes
 
-- `public/styles.css` is generated. Rebuild when changing classes in `public/main.js` or `public/index.html`.
-- Untracked count excludes Git-ignored files.
+- If `dist/` is missing and you run `npm run start`, frontend routes return a build-not-found error.
+- In development, use `http://localhost:5173` for the UI.
