@@ -2,6 +2,8 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import * as git from 'isomorphic-git';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +11,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 4173;
 const DEFAULT_REPO = process.env.GIT_DASHBOARD_REPO || __dirname;
+const execFileAsync = promisify(execFile);
+const GIT_BIN = process.env.GIT_BIN || '/usr/bin/git';
+const VERSION_FILES = [
+  path.join(__dirname, 'public', 'index.html'),
+  path.join(__dirname, 'public', 'main.js'),
+  path.join(__dirname, 'public', 'styles.css')
+];
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -37,14 +46,66 @@ async function listStateFiles(dir) {
       untracked.push({ file });
     }
     if (isStaged) {
-      staged.push({ file, additions: null, deletions: null });
+      staged.push({ file, additions: 0, deletions: 0 });
     }
     if (isModified) {
-      modified.push({ file, additions: null, deletions: null });
+      modified.push({ file, additions: 0, deletions: 0 });
     }
   }
 
   return { staged, modified, untracked };
+}
+
+function parseNumstat(raw) {
+  const stats = new Map();
+  const lines = raw.split('\n').filter(Boolean);
+  for (const line of lines) {
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    const additions = Number.isFinite(Number(parts[0])) ? Number(parts[0]) : 0;
+    const deletions = Number.isFinite(Number(parts[1])) ? Number(parts[1]) : 0;
+    const file = parts[2];
+    stats.set(file, { additions, deletions });
+  }
+  return stats;
+}
+
+async function getDiffNumstatMap(dir, args) {
+  try {
+    const { stdout } = await execFileAsync(GIT_BIN, args, { cwd: dir });
+    return parseNumstat(stdout);
+  } catch (error) {
+    console.error('numstat command failed', { bin: GIT_BIN, args, dir, error: error instanceof Error ? error.message : error });
+    try {
+      const { stdout } = await execFileAsync('git', args, { cwd: dir });
+      return parseNumstat(stdout);
+    } catch {
+      return new Map();
+    }
+  }
+}
+
+async function getFileDiffStat(dir, file, cached = false) {
+  const args = ['diff'];
+  if (cached) args.push('--cached');
+  args.push('--numstat', '--', file);
+  const statMap = await getDiffNumstatMap(dir, args);
+  const direct = statMap.get(file);
+  if (direct) return direct;
+  for (const [key, value] of statMap.entries()) {
+    if (key.endsWith(`/${file}`) || key === `./${file}`) return value;
+  }
+  return { additions: 0, deletions: 0 };
+}
+
+async function populateFileStats(dir, rows, cached = false) {
+  await Promise.all(
+    rows.map(async (row) => {
+      const stat = await getFileDiffStat(dir, row.file, cached);
+      row.additions = stat.additions;
+      row.deletions = stat.deletions;
+    })
+  );
 }
 
 async function readRefOid(dir, ref) {
@@ -75,9 +136,30 @@ function compactCommit(commit) {
     oid: commit.oid,
     message: (commit.commit.message || '').split('\n')[0],
     ts: commit.commit.committer?.timestamp || 0,
-    additions: null,
-    deletions: null
+    additions: 0,
+    deletions: 0
   };
+}
+
+async function getCommitDiffStat(dir, oid) {
+  const statMap = await getDiffNumstatMap(dir, ['show', '--numstat', '--format=', oid]);
+  let additions = 0;
+  let deletions = 0;
+  for (const stat of statMap.values()) {
+    additions += stat.additions;
+    deletions += stat.deletions;
+  }
+  return { additions, deletions };
+}
+
+async function populateCommitStats(dir, commits) {
+  await Promise.all(
+    commits.map(async (commit) => {
+      const stat = await getCommitDiffStat(dir, commit.oid);
+      commit.additions = stat.additions;
+      commit.deletions = stat.deletions;
+    })
+  );
 }
 
 async function getAheadBehind(dir, branch) {
@@ -126,6 +208,12 @@ async function getRepoState(dir) {
   const branch = await safeCurrentBranch(dir);
   const { staged, modified, untracked } = await listStateFiles(dir);
   const { ahead, behind, aheadCommits, behindCommits } = await getAheadBehind(dir, branch);
+  await Promise.all([
+    populateFileStats(dir, staged, true),
+    populateFileStats(dir, modified, false),
+    populateCommitStats(dir, aheadCommits),
+    populateCommitStats(dir, behindCommits)
+  ]);
 
   return {
     repository: repoName,
@@ -146,6 +234,21 @@ async function getRepoState(dir) {
     }
   };
 }
+
+function getAssetVersion() {
+  let maxMtimeMs = 0;
+  for (const file of VERSION_FILES) {
+    try {
+      const stat = fs.statSync(file);
+      if (stat.mtimeMs > maxMtimeMs) maxMtimeMs = stat.mtimeMs;
+    } catch {}
+  }
+  return String(Math.floor(maxMtimeMs));
+}
+
+app.get('/api/version', (_req, res) => {
+  res.json({ version: getAssetVersion() });
+});
 
 app.get('/api/state', async (req, res) => {
   const target = req.query.repo ? path.resolve(String(req.query.repo)) : DEFAULT_REPO;
