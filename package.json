@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:api": "node server.js",
+    "dev:api": "tsx server.ts",
     "dev:web": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "tsx server.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -19,12 +19,14 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.13.14",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.1.2",
     "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.2",
     "vite": "^5.4.14"
   }

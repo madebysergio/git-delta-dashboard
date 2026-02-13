@@ -38,7 +38,7 @@ The interface is designed for quick scanning:
 
 ## Project Structure
 
-- `server.js` - Express API server and Git state service
+- `server.ts` - Express API server and Git state service
 - `src/App.tsx` - Dashboard UI
 - `src/main.tsx` - React entrypoint
 - `src/styles.css` - Tailwind import + dark variant
