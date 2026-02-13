@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 4173;
 const DEFAULT_REPO = process.env.GIT_DASHBOARD_REPO || __dirname;
 const execFileAsync = promisify(execFile);
 const GIT_BIN = process.env.GIT_BIN || '/usr/bin/git';
+const MAX_COMMIT_ROWS = 100;
 const VERSION_FILES = [
   path.join(__dirname, 'public', 'index.html'),
   path.join(__dirname, 'public', 'main.js'),
@@ -125,6 +126,14 @@ async function readCommitMap(dir, ref, depth = 300) {
   }
 }
 
+async function readCommits(dir, ref = 'HEAD', depth = MAX_COMMIT_ROWS) {
+  try {
+    return await git.log({ fs, dir, ref, depth });
+  } catch {
+    return [];
+  }
+}
+
 function countUntilBase(map, baseOid) {
   if (!baseOid) return 0;
   const base = map.get(baseOid);
@@ -134,10 +143,11 @@ function countUntilBase(map, baseOid) {
 function compactCommit(commit) {
   return {
     oid: commit.oid,
-    message: (commit.commit.message || '').split('\n')[0],
+    message: (commit.commit.message || '').trim() || commit.oid.slice(0, 7),
     ts: commit.commit.committer?.timestamp || 0,
     additions: 0,
-    deletions: 0
+    deletions: 0,
+    files: []
   };
 }
 
@@ -145,11 +155,15 @@ async function getCommitDiffStat(dir, oid) {
   const statMap = await getDiffNumstatMap(dir, ['show', '--numstat', '--format=', oid]);
   let additions = 0;
   let deletions = 0;
+  const files = [];
   for (const stat of statMap.values()) {
     additions += stat.additions;
     deletions += stat.deletions;
   }
-  return { additions, deletions };
+  for (const [file, stat] of statMap.entries()) {
+    files.push({ file, additions: stat.additions, deletions: stat.deletions });
+  }
+  return { additions, deletions, files };
 }
 
 async function populateCommitStats(dir, commits) {
@@ -158,22 +172,35 @@ async function populateCommitStats(dir, commits) {
       const stat = await getCommitDiffStat(dir, commit.oid);
       commit.additions = stat.additions;
       commit.deletions = stat.deletions;
+      commit.files = stat.files;
     })
   );
 }
 
 async function getAheadBehind(dir, branch) {
   if (!branch || branch === '(detached)' || branch === '(unknown)') {
-    return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [] };
+    return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [], aheadMode: 'upstream' };
   }
 
   const localRef = `refs/heads/${branch}`;
-  const remoteRef = `refs/remotes/origin/${branch}`;
+  let remoteRef = null;
+  try {
+    const remoteName = await git.getConfig({ fs, dir, path: `branch.${branch}.remote` });
+    const mergeRef = await git.getConfig({ fs, dir, path: `branch.${branch}.merge` });
+    if (remoteName && mergeRef && mergeRef.startsWith('refs/heads/')) {
+      remoteRef = `refs/remotes/${remoteName}/${mergeRef.slice('refs/heads/'.length)}`;
+    }
+  } catch {}
+  if (!remoteRef) {
+    remoteRef = `refs/remotes/origin/${branch}`;
+  }
   const localOid = await readRefOid(dir, localRef);
   const remoteOid = await readRefOid(dir, remoteRef);
 
   if (!localOid || !remoteOid) {
-    return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [] };
+    const localCommits = await readCommits(dir, localRef, MAX_COMMIT_ROWS);
+    const aheadCommits = localCommits.map((c) => compactCommit(c));
+    return { ahead: aheadCommits.length, behind: 0, aheadCommits, behindCommits: [], aheadMode: 'local' };
   }
 
   const [localMap, remoteMap] = await Promise.all([
@@ -193,21 +220,21 @@ async function getAheadBehind(dir, branch) {
   const behind = countUntilBase(remoteMap, baseOid);
 
   const aheadCommits = Array.from(localMap.values())
-    .slice(0, Math.min(ahead, 12))
+    .slice(0, Math.min(ahead, MAX_COMMIT_ROWS))
     .map((v) => compactCommit(v.commit));
 
   const behindCommits = Array.from(remoteMap.values())
-    .slice(0, Math.min(behind, 12))
+    .slice(0, Math.min(behind, MAX_COMMIT_ROWS))
     .map((v) => compactCommit(v.commit));
 
-  return { ahead, behind, aheadCommits, behindCommits };
+  return { ahead, behind, aheadCommits, behindCommits, aheadMode: 'upstream' };
 }
 
 async function getRepoState(dir) {
   const repoName = path.basename(dir);
   const branch = await safeCurrentBranch(dir);
   const { staged, modified, untracked } = await listStateFiles(dir);
-  const { ahead, behind, aheadCommits, behindCommits } = await getAheadBehind(dir, branch);
+  const { ahead, behind, aheadCommits, behindCommits, aheadMode } = await getAheadBehind(dir, branch);
   await Promise.all([
     populateFileStats(dir, staged, true),
     populateFileStats(dir, modified, false),
@@ -224,6 +251,9 @@ async function getRepoState(dir) {
       untracked: untracked.length,
       ahead,
       behind
+    },
+    meta: {
+      aheadMode
     },
     details: {
       staged,
