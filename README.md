@@ -33,7 +33,7 @@ The interface is designed for quick scanning:
 - Express
 - isomorphic-git
 - Tailwind CSS v4 (`@tailwindcss/cli`)
-- Vanilla JavaScript frontend
+- React frontend
 
 ## Project Structure
 

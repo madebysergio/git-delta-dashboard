@@ -2,6 +2,8 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import * as git from 'isomorphic-git';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +11,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 4173;
 const DEFAULT_REPO = process.env.GIT_DASHBOARD_REPO || __dirname;
+const execFileAsync = promisify(execFile);
+const GIT_BIN = process.env.GIT_BIN || '/usr/bin/git';
+const MAX_COMMIT_ROWS = 100;
+const VERSION_FILES = [
+  path.join(__dirname, 'public', 'index.html'),
+  path.join(__dirname, 'public', 'main.js'),
+  path.join(__dirname, 'public', 'styles.css')
+];
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -37,14 +47,66 @@ async function listStateFiles(dir) {
       untracked.push({ file });
     }
     if (isStaged) {
-      staged.push({ file, additions: null, deletions: null });
+      staged.push({ file, additions: 0, deletions: 0 });
     }
     if (isModified) {
-      modified.push({ file, additions: null, deletions: null });
+      modified.push({ file, additions: 0, deletions: 0 });
     }
   }
 
   return { staged, modified, untracked };
+}
+
+function parseNumstat(raw) {
+  const stats = new Map();
+  const lines = raw.split('\n').filter(Boolean);
+  for (const line of lines) {
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    const additions = Number.isFinite(Number(parts[0])) ? Number(parts[0]) : 0;
+    const deletions = Number.isFinite(Number(parts[1])) ? Number(parts[1]) : 0;
+    const file = parts[2];
+    stats.set(file, { additions, deletions });
+  }
+  return stats;
+}
+
+async function getDiffNumstatMap(dir, args) {
+  try {
+    const { stdout } = await execFileAsync(GIT_BIN, args, { cwd: dir });
+    return parseNumstat(stdout);
+  } catch (error) {
+    console.error('numstat command failed', { bin: GIT_BIN, args, dir, error: error instanceof Error ? error.message : error });
+    try {
+      const { stdout } = await execFileAsync('git', args, { cwd: dir });
+      return parseNumstat(stdout);
+    } catch {
+      return new Map();
+    }
+  }
+}
+
+async function getFileDiffStat(dir, file, cached = false) {
+  const args = ['diff'];
+  if (cached) args.push('--cached');
+  args.push('--numstat', '--', file);
+  const statMap = await getDiffNumstatMap(dir, args);
+  const direct = statMap.get(file);
+  if (direct) return direct;
+  for (const [key, value] of statMap.entries()) {
+    if (key.endsWith(`/${file}`) || key === `./${file}`) return value;
+  }
+  return { additions: 0, deletions: 0 };
+}
+
+async function populateFileStats(dir, rows, cached = false) {
+  await Promise.all(
+    rows.map(async (row) => {
+      const stat = await getFileDiffStat(dir, row.file, cached);
+      row.additions = stat.additions;
+      row.deletions = stat.deletions;
+    })
+  );
 }
 
 async function readRefOid(dir, ref) {
@@ -64,6 +126,14 @@ async function readCommitMap(dir, ref, depth = 300) {
   }
 }
 
+async function readCommits(dir, ref = 'HEAD', depth = MAX_COMMIT_ROWS) {
+  try {
+    return await git.log({ fs, dir, ref, depth });
+  } catch {
+    return [];
+  }
+}
+
 function countUntilBase(map, baseOid) {
   if (!baseOid) return 0;
   const base = map.get(baseOid);
@@ -73,25 +143,64 @@ function countUntilBase(map, baseOid) {
 function compactCommit(commit) {
   return {
     oid: commit.oid,
-    message: (commit.commit.message || '').split('\n')[0],
+    message: (commit.commit.message || '').trim() || commit.oid.slice(0, 7),
     ts: commit.commit.committer?.timestamp || 0,
-    additions: null,
-    deletions: null
+    additions: 0,
+    deletions: 0,
+    files: []
   };
+}
+
+async function getCommitDiffStat(dir, oid) {
+  const statMap = await getDiffNumstatMap(dir, ['show', '--numstat', '--format=', oid]);
+  let additions = 0;
+  let deletions = 0;
+  const files = [];
+  for (const stat of statMap.values()) {
+    additions += stat.additions;
+    deletions += stat.deletions;
+  }
+  for (const [file, stat] of statMap.entries()) {
+    files.push({ file, additions: stat.additions, deletions: stat.deletions });
+  }
+  return { additions, deletions, files };
+}
+
+async function populateCommitStats(dir, commits) {
+  await Promise.all(
+    commits.map(async (commit) => {
+      const stat = await getCommitDiffStat(dir, commit.oid);
+      commit.additions = stat.additions;
+      commit.deletions = stat.deletions;
+      commit.files = stat.files;
+    })
+  );
 }
 
 async function getAheadBehind(dir, branch) {
   if (!branch || branch === '(detached)' || branch === '(unknown)') {
-    return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [] };
+    return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [], aheadMode: 'upstream' };
   }
 
   const localRef = `refs/heads/${branch}`;
-  const remoteRef = `refs/remotes/origin/${branch}`;
+  let remoteRef = null;
+  try {
+    const remoteName = await git.getConfig({ fs, dir, path: `branch.${branch}.remote` });
+    const mergeRef = await git.getConfig({ fs, dir, path: `branch.${branch}.merge` });
+    if (remoteName && mergeRef && mergeRef.startsWith('refs/heads/')) {
+      remoteRef = `refs/remotes/${remoteName}/${mergeRef.slice('refs/heads/'.length)}`;
+    }
+  } catch {}
+  if (!remoteRef) {
+    remoteRef = `refs/remotes/origin/${branch}`;
+  }
   const localOid = await readRefOid(dir, localRef);
   const remoteOid = await readRefOid(dir, remoteRef);
 
   if (!localOid || !remoteOid) {
-    return { ahead: 0, behind: 0, aheadCommits: [], behindCommits: [] };
+    const localCommits = await readCommits(dir, localRef, MAX_COMMIT_ROWS);
+    const aheadCommits = localCommits.map((c) => compactCommit(c));
+    return { ahead: aheadCommits.length, behind: 0, aheadCommits, behindCommits: [], aheadMode: 'local' };
   }
 
   const [localMap, remoteMap] = await Promise.all([
@@ -111,21 +220,27 @@ async function getAheadBehind(dir, branch) {
   const behind = countUntilBase(remoteMap, baseOid);
 
   const aheadCommits = Array.from(localMap.values())
-    .slice(0, Math.min(ahead, 12))
+    .slice(0, Math.min(ahead, MAX_COMMIT_ROWS))
     .map((v) => compactCommit(v.commit));
 
   const behindCommits = Array.from(remoteMap.values())
-    .slice(0, Math.min(behind, 12))
+    .slice(0, Math.min(behind, MAX_COMMIT_ROWS))
     .map((v) => compactCommit(v.commit));
 
-  return { ahead, behind, aheadCommits, behindCommits };
+  return { ahead, behind, aheadCommits, behindCommits, aheadMode: 'upstream' };
 }
 
 async function getRepoState(dir) {
   const repoName = path.basename(dir);
   const branch = await safeCurrentBranch(dir);
   const { staged, modified, untracked } = await listStateFiles(dir);
-  const { ahead, behind, aheadCommits, behindCommits } = await getAheadBehind(dir, branch);
+  const { ahead, behind, aheadCommits, behindCommits, aheadMode } = await getAheadBehind(dir, branch);
+  await Promise.all([
+    populateFileStats(dir, staged, true),
+    populateFileStats(dir, modified, false),
+    populateCommitStats(dir, aheadCommits),
+    populateCommitStats(dir, behindCommits)
+  ]);
 
   return {
     repository: repoName,
@@ -137,6 +252,9 @@ async function getRepoState(dir) {
       ahead,
       behind
     },
+    meta: {
+      aheadMode
+    },
     details: {
       staged,
       modified,
@@ -146,6 +264,21 @@ async function getRepoState(dir) {
     }
   };
 }
+
+function getAssetVersion() {
+  let maxMtimeMs = 0;
+  for (const file of VERSION_FILES) {
+    try {
+      const stat = fs.statSync(file);
+      if (stat.mtimeMs > maxMtimeMs) maxMtimeMs = stat.mtimeMs;
+    } catch {}
+  }
+  return String(Math.floor(maxMtimeMs));
+}
+
+app.get('/api/version', (_req, res) => {
+  res.json({ version: getAssetVersion() });
+});
 
 app.get('/api/state', async (req, res) => {
   const target = req.query.repo ? path.resolve(String(req.query.repo)) : DEFAULT_REPO;
