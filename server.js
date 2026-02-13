@@ -14,13 +14,16 @@ const DEFAULT_REPO = process.env.GIT_DASHBOARD_REPO || __dirname;
 const execFileAsync = promisify(execFile);
 const GIT_BIN = process.env.GIT_BIN || '/usr/bin/git';
 const MAX_COMMIT_ROWS = 100;
+const DIST_DIR = path.join(__dirname, 'dist');
 const VERSION_FILES = [
-  path.join(__dirname, 'public', 'index.html'),
-  path.join(__dirname, 'public', 'main.js'),
-  path.join(__dirname, 'public', 'styles.css')
+  path.join(__dirname, 'src', 'App.tsx'),
+  path.join(__dirname, 'src', 'main.tsx'),
+  path.join(__dirname, 'src', 'styles.css')
 ];
 
-app.use(express.static(path.join(__dirname, 'public')));
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+}
 
 async function safeCurrentBranch(dir) {
   try {
@@ -291,7 +294,11 @@ app.get('/api/state', async (req, res) => {
 });
 
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  if (fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+    return;
+  }
+  res.status(404).json({ error: 'Frontend build not found. Run `npm run dev` for Vite or `npm run build` for production.' });
 });
 
 app.listen(PORT, () => {
