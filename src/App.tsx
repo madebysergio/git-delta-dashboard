@@ -30,14 +30,15 @@ const CLASSES = {
   modal: 'w-full max-w-xl rounded-2xl border border-slate-300 bg-slate-50 p-4 shadow-[0_14px_36px_-16px_rgba(15,23,42,0.18),0_2px_10px_-5px_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-900',
   modalTitle: 'text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-slate-100',
   modalRow: 'mt-3 flex flex-col gap-2',
-  counters: 'flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-5',
-  counter: 'group flex min-w-[146px] cursor-pointer items-center justify-between rounded-full border border-slate-300 bg-slate-100 px-5 py-2.5 text-left transition-colors duration-200 enabled:hover:border-slate-400 enabled:hover:bg-slate-50 enabled:active:bg-slate-200 disabled:cursor-default disabled:opacity-55 dark:border-slate-700 dark:bg-slate-800/90 dark:enabled:hover:border-slate-600 dark:enabled:hover:bg-slate-700/70 dark:enabled:active:bg-slate-700 sm:min-w-[160px]',
+  countersWrap: 'relative overflow-hidden border-b border-slate-200 dark:border-slate-800',
+  counters: 'flex gap-2 overflow-x-auto px-4 py-3 sm:px-5',
+  counter: 'group shrink-0 grid min-w-[146px] grid-cols-[28px_40px_1fr] items-center rounded-full border border-slate-300 bg-slate-100 px-5 py-2.5 text-left transition-colors duration-200 enabled:hover:border-slate-400 enabled:hover:bg-slate-50 enabled:active:bg-slate-200 disabled:cursor-default disabled:opacity-55 dark:border-slate-700 dark:bg-slate-800/90 dark:enabled:hover:border-slate-600 dark:enabled:hover:bg-slate-700/70 dark:enabled:active:bg-slate-700 sm:min-w-[160px]',
   counterActive: '!border-amber-500 !bg-amber-500 !text-white ring-2 ring-amber-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-amber-400 dark:!text-white dark:ring-0',
   counterUntracked: '!border-fuchsia-600 !bg-fuchsia-600 !text-white ring-2 ring-fuchsia-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-fuchsia-400 dark:!text-white dark:ring-0',
   counterCommits: '!border-emerald-500 !bg-emerald-500 !text-white ring-0 shadow-none dark:!border-slate-600 dark:!bg-emerald-500 dark:!text-white dark:ring-0',
   counterUnstaged: '!border-rose-600 !bg-rose-600 !text-white ring-2 ring-rose-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-rose-400 dark:!text-white dark:ring-0',
   counterLabel: 'text-xs font-normal uppercase tracking-wide text-slate-700 dark:text-slate-300',
-  counterValue: 'text-2xl font-medium leading-none tracking-tight',
+  counterValue: 'text-2xl font-medium leading-none tracking-tight tabular-nums',
   empty: 'flex h-full items-center justify-center px-4 text-center text-lg text-slate-700 dark:text-slate-300',
   panelShell: 'relative h-full min-h-0 overflow-hidden',
   panel: 'm-0 h-full list-none overflow-auto p-0 pb-10',
@@ -99,7 +100,7 @@ function Icon({ kind, className }: { kind: Group['icon']; className?: string }) 
   if (kind === 'staged') return <svg {...base}><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M8.5 11 15.5 7.2" /><path d="M8.5 13 15.5 16.8" /></svg>;
   if (kind === 'unstaged') return <svg {...base}><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="12" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M8.5 7.2 15.5 10.8" /><path d="M8.5 16.8 15.5 13.2" /></svg>;
   if (kind === 'untracked') return <svg {...base}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M12 12v4" /><path d="M12 18h.01" /></svg>;
-  if (kind === 'commits') return <svg {...base}><line x1="6" y1="12" x2="18" y2="12" /><circle cx="12" cy="12" r="3.5" /></svg>;
+  if (kind === 'commits') return <svg {...base}><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="3.5" /><circle cx="19" cy="12" r="2" /><path d="M7 12h2" /><path d="M14 12h3" /></svg>;
   return <svg {...base}><path d="M12 21V9" /><path d="m17 14-5-5-5 5" /></svg>;
 }
 
@@ -347,6 +348,9 @@ export default function App() {
   const toastTimers = useRef<Map<number, number>>(new Map());
   const toastId = useRef(1);
   const footerRef = useRef<HTMLElement | null>(null);
+  const countersRef = useRef<HTMLElement | null>(null);
+  const counterAutoDir = useRef<0 | 1 | -1>(0);
+  const counterAutoRaf = useRef<number | null>(null);
 
   const showToast = useCallback((message: string, ttlMs = 4600) => {
     const id = toastId.current++;
@@ -389,7 +393,31 @@ export default function App() {
     return () => {
       for (const t of toastTimers.current.values()) window.clearTimeout(t);
       toastTimers.current.clear();
+      if (counterAutoRaf.current !== null) window.cancelAnimationFrame(counterAutoRaf.current);
     };
+  }, []);
+
+  const stopCounterAutoScroll = useCallback(() => {
+    counterAutoDir.current = 0;
+    if (counterAutoRaf.current !== null) {
+      window.cancelAnimationFrame(counterAutoRaf.current);
+      counterAutoRaf.current = null;
+    }
+  }, []);
+
+  const startCounterAutoScroll = useCallback((dir: 1 | -1) => {
+    counterAutoDir.current = dir;
+    if (counterAutoRaf.current !== null) return;
+    const tick = () => {
+      const el = countersRef.current;
+      if (!el || counterAutoDir.current === 0) {
+        counterAutoRaf.current = null;
+        return;
+      }
+      el.scrollLeft += counterAutoDir.current * 8;
+      counterAutoRaf.current = window.requestAnimationFrame(tick);
+    };
+    counterAutoRaf.current = window.requestAnimationFrame(tick);
   }, []);
 
   useEffect(() => {
@@ -769,7 +797,27 @@ export default function App() {
         <section className={CLASSES.actions}>
         </section>
 
-        <section className={CLASSES.counters}>
+        <section className={CLASSES.countersWrap}>
+        <div
+          className={CLASSES.counters}
+          ref={countersRef}
+          onMouseMove={(e) => {
+            const el = countersRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const edge = 56;
+            const x = e.clientX - rect.left;
+            const maxScroll = el.scrollWidth - el.clientWidth;
+            if (x >= rect.width - edge && el.scrollLeft < maxScroll) {
+              startCounterAutoScroll(1);
+            } else if (x <= edge && el.scrollLeft > 0) {
+              startCounterAutoScroll(-1);
+            } else {
+              stopCounterAutoScroll();
+            }
+          }}
+          onMouseLeave={stopCounterAutoScroll}
+        >
           {groups.map((g) => {
             const active = expanded === g.id;
             const labelClass = active ? `${CLASSES.counterLabel} !text-current` : CLASSES.counterLabel;
@@ -793,16 +841,18 @@ export default function App() {
                   setExpanded((prev) => (prev === g.id ? null : g.id));
                 }}
               >
-                <span className={CLASSES.counterValue}>{g.value}</span>
-                <span className={`${labelClass} inline-flex items-center gap-2`}>
-                  <span className="inline-flex w-4 items-center justify-center">
-                    <Icon kind={g.icon} className="h-3.5 w-3.5" />
-                  </span>
+                <span className="inline-flex items-center justify-center">
+                  <Icon kind={g.icon} className="h-7 w-7" />
+                </span>
+                <span className={`${CLASSES.counterValue} text-center`}>{g.value}</span>
+                <span className={`${labelClass} pl-2`}>
                   {g.label}
                 </span>
               </button>
             );
           })}
+        </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-slate-200/95 via-slate-200/70 to-transparent dark:from-slate-900/95 dark:via-slate-900/70" />
         </section>
 
         {!expanded ? (
@@ -844,14 +894,16 @@ export default function App() {
                   disabled={busyAction !== null}
                   onClick={() => runAction('unstage')}
                 >
-                  <span className="inline-flex items-center justify-center gap-2">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                      <circle cx="6" cy="6" r="2.5" />
-                      <circle cx="18" cy="12" r="2.5" />
-                      <circle cx="6" cy="18" r="2.5" />
-                      <path d="M8.5 7.2 15.5 10.8" />
-                      <path d="M8.5 16.8 15.5 13.2" />
-                    </svg>
+                  <span className="inline-flex items-center justify-center">
+                    <span className="mr-2 inline-flex w-4 items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <circle cx="6" cy="6" r="2.5" />
+                        <circle cx="18" cy="12" r="2.5" />
+                        <circle cx="6" cy="18" r="2.5" />
+                        <path d="M8.5 7.2 15.5 10.8" />
+                        <path d="M8.5 16.8 15.5 13.2" />
+                      </svg>
+                    </span>
                     <span>UNSTAGE ALL</span>
                   </span>
                 </button>
@@ -865,7 +917,7 @@ export default function App() {
                   onClick={() => runAction('add')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
+                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
                         <path d="M14 3v5h5" />
@@ -885,7 +937,7 @@ export default function App() {
                   onClick={() => setCommitOpen(true)}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
+                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <line x1="4" y1="12" x2="20" y2="12" />
                         <circle cx="12" cy="12" r="3.5" />
@@ -903,7 +955,7 @@ export default function App() {
                   onClick={() => runAction('push')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
+                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <circle cx="6" cy="12" r="2.5" />
                         <circle cx="18" cy="6" r="2.5" />
