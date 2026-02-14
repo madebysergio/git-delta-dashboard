@@ -899,7 +899,7 @@ export default function App() {
             </div>
           </div>
           <div className={`${CLASSES.branch} flex items-center justify-start gap-2`}>
-            <span ref={branchMenuRef} className="relative inline-flex min-w-0 items-center gap-2">
+            <span ref={branchMenuRef} className="relative inline-flex min-w-0 max-w-full items-center gap-2">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <circle cx="6" cy="6" r="2" />
                 <circle cx="18" cy="6" r="2" />
@@ -907,16 +907,16 @@ export default function App() {
                 <path d="M8 6h8" />
                 <path d="M18 8v8" />
               </svg>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 truncate text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
+                <button
+                  type="button"
+                className="inline-flex min-w-0 max-w-full items-center gap-1 text-3xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
                 disabled={branchBusy}
                 onClick={() => {
                   setBranchMenuOpen((v) => !v);
                   fetchBranches(true);
                 }}
               >
-                <span>{state.branch}</span>
+                <span className="block min-w-0 max-w-[min(70vw,560px)] truncate">{state.branch}</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 transition-transform ${branchMenuOpen ? 'rotate-180' : ''}`}>
                   <path d="m6 9 6 6 6-6" />
                 </svg>
