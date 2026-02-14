@@ -89,6 +89,17 @@ function formatCommitWhen(ts: number, nowMs: number): string {
   return `${years} year(s) ago`;
 }
 
+function formatSince(ts: number, nowMs: number): string {
+  const delta = Math.max(0, Math.floor((nowMs - ts * 1000) / 1000));
+  if (delta < 60) return `${delta} sec ago`;
+  const min = Math.floor(delta / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hr ago`;
+  const day = Math.floor(hr / 24);
+  return day === 1 ? '1 day ago' : `${day} days ago`;
+}
+
 function truncateBranchName(name: string, max = 35): string {
   if (!name) return name;
   if (name.length <= max) return name;
@@ -689,6 +700,7 @@ export default function App() {
   }
 
   let detailRows: JSX.Element[] | null = null;
+  let lastPushedLabel = '';
   if (expanded === 'staged') {
     detailRows = state.details.staged.map((item) => (
       <FileRow
@@ -727,6 +739,9 @@ export default function App() {
     const byNewest = (a: CommitDelta, b: CommitDelta) => (b.ts || 0) - (a.ts || 0);
     const pushedOnly = (state.details.recent || []).filter((c) => !aheadSet.has(c.oid)).sort(byNewest);
     const unpushedOnly = [...state.details.ahead].sort(byNewest);
+    if (pushedOnly.length > 0 && pushedOnly[0].ts) {
+      lastPushedLabel = `LAST PUSH ${formatSince(pushedOnly[0].ts, nowMs)}`;
+    }
     const selected = commitFilter === 'unpushed'
       ? unpushedOnly
       : commitFilter === 'pushed'
@@ -880,7 +895,10 @@ export default function App() {
         ) : (
           <section className={CLASSES.panelShell}>
             {expanded === 'ahead' ? (
-              <div className="flex justify-end px-3 pt-3">
+              <div className="flex items-center justify-between px-3 pt-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 opacity-80 dark:text-slate-400">
+                  {lastPushedLabel}
+                </span>
                 <button
                   type="button"
                   className={`${CLASSES.actionBtn} ${commitFilter === 'all' ? 'bg-slate-200 opacity-70 hover:bg-slate-200 active:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-900 dark:active:bg-slate-900' : ''}`}
