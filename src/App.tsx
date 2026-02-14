@@ -13,9 +13,9 @@ type Group = {
 const CLASSES = {
   page: 'h-full w-full',
   frame: 'grid h-full w-full grid-rows-[auto_auto_auto_1fr_auto] bg-slate-200 dark:bg-slate-900',
-  bar: 'flex flex-col gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-5',
+  bar: 'relative z-20 flex flex-col gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-5',
   title: 'text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100',
-  branch: 'mt-2 truncate text-2xl font-semibold text-slate-700 dark:text-slate-300',
+  branch: 'mt-2 text-2xl font-semibold text-slate-700 dark:text-slate-300',
   topRight: 'flex items-center gap-2',
   themeBtn: 'group cursor-pointer inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-400 text-slate-800 transition-colors duration-200 hover:bg-slate-100 active:bg-slate-200 dark:border-slate-500 dark:text-slate-100 dark:hover:bg-slate-800 dark:active:bg-slate-700',
   actions: 'border-b border-slate-200 dark:border-slate-800',
@@ -372,7 +372,18 @@ export default function App() {
   const [branches, setBranches] = useState<string[]>([]);
   const [branchInput, setBranchInput] = useState('');
   const [branchOpen, setBranchOpen] = useState(false);
-  const [branchMenuValue, setBranchMenuValue] = useState('');
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [repos, setRepos] = useState<Array<{ name: string; path: string }>>([]);
+  const [repoPath, setRepoPath] = useState<string>(() => {
+    try {
+      return localStorage.getItem('git-dashboard-repo-path') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [repoOpen, setRepoOpen] = useState(false);
+  const [repoInput, setRepoInput] = useState('');
+  const [repoMenuOpen, setRepoMenuOpen] = useState(false);
   const [commitFilter, setCommitFilter] = useState<'all' | 'pushed' | 'unpushed'>('all');
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; leaving?: boolean }>>([]);
   const [toastBottom, setToastBottom] = useState(8);
@@ -380,6 +391,8 @@ export default function App() {
   const toastId = useRef(1);
   const footerRef = useRef<HTMLElement | null>(null);
   const countersRef = useRef<HTMLElement | null>(null);
+  const repoMenuRef = useRef<HTMLSpanElement | null>(null);
+  const branchMenuRef = useRef<HTMLSpanElement | null>(null);
   const counterAutoDir = useRef<0 | 1 | -1>(0);
   const counterAutoRaf = useRef<number | null>(null);
 
@@ -397,15 +410,34 @@ export default function App() {
     toastTimers.current.set(id, t);
   }, []);
 
+  const withRepo = useCallback((endpoint: string) => {
+    if (!repoPath) return endpoint;
+    const sep = endpoint.includes('?') ? '&' : '?';
+    return `${endpoint}${sep}repo=${encodeURIComponent(repoPath)}`;
+  }, [repoPath]);
+
+  const bodyWithRepo = useCallback((payload: Record<string, unknown>) => {
+    return repoPath ? { ...payload, repo: repoPath } : payload;
+  }, [repoPath]);
+
+  const fetchRepos = useCallback(async () => {
+    try {
+      const res = await fetch('/api/repos');
+      const body = await parseJsonOrThrow(res) as { repos?: Array<{ name: string; path: string }> };
+      if (!res.ok) return;
+      setRepos(Array.isArray(body.repos) ? body.repos : []);
+    } catch {}
+  }, []);
+
   const fetchBranches = useCallback(async (active = true) => {
     try {
-      const res = await fetch('/api/branches');
+      const res = await fetch(withRepo('/api/branches'));
       const body = await parseJsonOrThrow(res) as { branches?: string[] };
       if (!res.ok) return;
       if (!active) return;
       setBranches(Array.isArray(body.branches) ? body.branches : []);
     } catch {}
-  }, []);
+  }, [withRepo]);
 
   const closeToast = useCallback((id: number) => {
     const t = toastTimers.current.get(id);
@@ -427,6 +459,28 @@ export default function App() {
       if (counterAutoRaf.current !== null) window.cancelAnimationFrame(counterAutoRaf.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!repoMenuOpen) return;
+    const onDocDown = (ev: MouseEvent) => {
+      const node = repoMenuRef.current;
+      if (!node) return;
+      if (!node.contains(ev.target as Node)) setRepoMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onDocDown);
+    return () => window.removeEventListener('mousedown', onDocDown);
+  }, [repoMenuOpen]);
+
+  useEffect(() => {
+    if (!branchMenuOpen) return;
+    const onDocDown = (ev: MouseEvent) => {
+      const node = branchMenuRef.current;
+      if (!node) return;
+      if (!node.contains(ev.target as Node)) setBranchMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onDocDown);
+    return () => window.removeEventListener('mousedown', onDocDown);
+  }, [branchMenuOpen]);
 
   const stopCounterAutoScroll = useCallback(() => {
     counterAutoDir.current = 0;
@@ -495,6 +549,12 @@ export default function App() {
     return ordered;
   }, [state]);
 
+  const branchItems = useMemo(() => {
+    const set = new Set(branches);
+    if (state?.branch) set.add(state.branch);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [branches, state?.branch]);
+
   useEffect(() => {
     if (!groups.length) {
       setExpanded(null);
@@ -519,20 +579,26 @@ export default function App() {
 
   const fetchState = useCallback(async (active = true) => {
     try {
-      const res = await fetch('/api/state');
+      const res = await fetch(withRepo('/api/state'));
       const body = await parseJsonOrThrow(res);
       if (!res.ok) throw new Error(body.error || 'failed');
       if (!active) return;
       setState(body as RepoState);
       setError('');
+      if (!repoPath && (body as RepoState).repositoryPath) {
+        const p = (body as RepoState).repositoryPath as string;
+        setRepoPath(p);
+        try { localStorage.setItem('git-dashboard-repo-path', p); } catch {}
+      }
     } catch (err) {
       if (!active) return;
       setError(err instanceof Error ? err.message : 'failed to load state');
     }
-  }, []);
+  }, [repoPath, withRepo]);
 
   useEffect(() => {
     let active = true;
+    fetchRepos();
     fetchState(active);
     fetchBranches(active);
     const id = setInterval(() => fetchState(active), POLL_MS);
@@ -540,7 +606,7 @@ export default function App() {
       active = false;
       clearInterval(id);
     };
-  }, [fetchBranches, fetchState]);
+  }, [fetchBranches, fetchRepos, fetchState]);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
@@ -552,7 +618,7 @@ export default function App() {
 
     async function checkVersion() {
       try {
-        const res = await fetch('/api/version', { cache: 'no-store' });
+        const res = await fetch(withRepo('/api/version'), { cache: 'no-store' });
         const body = (await res.json()) as { version?: string };
         if (!active || !body.version) return;
         setAssetVersion((prev) => {
@@ -568,7 +634,7 @@ export default function App() {
       active = false;
       clearInterval(id);
     };
-  }, []);
+  }, [withRepo]);
 
   if (error) {
     return (
@@ -607,7 +673,7 @@ export default function App() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch: target, create })
+        body: JSON.stringify(bodyWithRepo({ branch: target, create }))
       });
       const payload = await parseJsonOrThrow(res);
       if (!res.ok) throw new Error(payload.error || 'checkout failed');
@@ -649,7 +715,7 @@ export default function App() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(bodyWithRepo(body))
       });
       const payload = await parseJsonOrThrow(res);
       if (!res.ok) throw new Error(payload.error || 'action failed');
@@ -685,7 +751,7 @@ export default function App() {
       const res = await fetch('/api/file-stage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file, stage })
+        body: JSON.stringify(bodyWithRepo({ file, stage }))
       });
       const payload = await parseJsonOrThrow(res);
       if (!res.ok) throw new Error(payload.error || 'action failed');
@@ -782,7 +848,49 @@ export default function App() {
           <div className="flex items-center justify-between gap-3">
             <div className={`${CLASSES.title} inline-flex items-center gap-2`}>
               <span className="repo-dot h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
-              <span>{state.repository}</span>
+              <span ref={repoMenuRef} className="relative inline-flex w-fit shrink-0">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 truncate text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100"
+                  onClick={() => setRepoMenuOpen((v) => !v)}
+                >
+                  <span>{state.repository}</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 transition-transform ${repoMenuOpen ? 'rotate-180' : ''}`}>
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {repoMenuOpen ? (
+                  <div className="absolute left-0 top-full z-[9999] mt-2 min-w-[220px] rounded-xl border border-slate-300 bg-slate-50 p-1 shadow-[0_12px_28px_-14px_rgba(15,23,42,0.35)] dark:border-slate-700 dark:bg-slate-900">
+                    {repos.map((r) => (
+                      <button
+                        key={r.path}
+                        type="button"
+                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-800 transition-colors hover:bg-slate-200/70 dark:text-slate-100 dark:hover:bg-slate-800"
+                        onClick={() => {
+                          setRepoMenuOpen(false);
+                          setRepoPath(r.path);
+                          try { localStorage.setItem('git-dashboard-repo-path', r.path); } catch {}
+                          fetchState(true);
+                          fetchBranches(true);
+                        }}
+                      >
+                        {r.name}
+                      </button>
+                    ))}
+                    <div className="my-1 border-t border-slate-300/70 dark:border-slate-700/70" />
+                    <button
+                      type="button"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-800 transition-colors hover:bg-slate-200/70 dark:text-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => {
+                        setRepoMenuOpen(false);
+                        setRepoOpen(true);
+                      }}
+                    >
+                      Choose Folder...
+                    </button>
+                  </div>
+                ) : null}
+              </span>
             </div>
             <div className={CLASSES.topRight}>
               <button type="button" className={CLASSES.themeBtn} onClick={() => setTheme((p) => (p === 'dark' ? 'light' : 'dark'))}>
@@ -790,8 +898,8 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className={`${CLASSES.branch} flex items-center justify-between gap-2`}>
-            <span className="inline-flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+          <div className={`${CLASSES.branch} flex items-center justify-start gap-2`}>
+            <span ref={branchMenuRef} className="relative inline-flex min-w-0 items-center gap-2">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <circle cx="6" cy="6" r="2" />
                 <circle cx="18" cy="6" r="2" />
@@ -799,34 +907,50 @@ export default function App() {
                 <path d="M8 6h8" />
                 <path d="M18 8v8" />
               </svg>
-              <span className="block min-w-0 flex-1 truncate" title={state.branch}>{truncateBranchName(state.branch, 21)}</span>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 truncate text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
+                disabled={branchBusy}
+                onClick={() => {
+                  setBranchMenuOpen((v) => !v);
+                  fetchBranches(true);
+                }}
+              >
+                <span>{state.branch}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 transition-transform ${branchMenuOpen ? 'rotate-180' : ''}`}>
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              {branchMenuOpen ? (
+                <div className="absolute left-0 top-full z-[9999] mt-2 min-w-[220px] rounded-xl border border-slate-300 bg-slate-50 p-1 shadow-[0_12px_28px_-14px_rgba(15,23,42,0.35)] dark:border-slate-700 dark:bg-slate-900">
+                  {branchItems.map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-800 transition-colors hover:bg-slate-200/70 dark:text-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => {
+                        setBranchMenuOpen(false);
+                        if (b === state.branch) return;
+                        checkoutBranch(b, false);
+                      }}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-slate-300/70 dark:border-slate-700/70" />
+                  <button
+                    type="button"
+                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-800 transition-colors hover:bg-slate-200/70 dark:text-slate-100 dark:hover:bg-slate-800"
+                    onClick={() => {
+                      setBranchMenuOpen(false);
+                      setBranchOpen(true);
+                    }}
+                  >
+                    New Branch
+                  </button>
+                </div>
+              ) : null}
             </span>
-            <span className="relative inline-flex w-fit shrink-0">
-            <select
-              className={`${CLASSES.branchSelect} truncate`}
-              value={branchMenuValue}
-              disabled={branchBusy}
-              onChange={(e) => {
-                const next = e.target.value;
-                setBranchMenuValue('');
-                if (!next || next === state.branch) return;
-                if (next === '__new__') {
-                  setBranchOpen(true);
-                  return;
-                }
-                checkoutBranch(next, false);
-              }}
-            >
-              <option value="">Branch</option>
-              {branches.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-              <option value="__new__">New Branch</option>
-            </select>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600 dark:text-slate-300">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </span>
           </div>
         </header>
         <section className={CLASSES.actions}>
@@ -1093,6 +1217,49 @@ export default function App() {
                     </span>
                     <span>CREATE + SWITCH</span>
                   </span>
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {repoOpen ? (
+          <section className={CLASSES.modalBackdrop}>
+            <div className={CLASSES.modal}>
+              <input
+                autoFocus
+                className="h-14 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold tracking-wide text-slate-900 outline-none placeholder:text-slate-500 focus:border-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                placeholder="/path/to/repo"
+                value={repoInput}
+                onChange={(e) => setRepoInput(e.target.value)}
+              />
+              <div className={CLASSES.modalRow}>
+                <button
+                  type="button"
+                  className={CLASSES.actionBtnFull}
+                  onClick={() => {
+                    setRepoOpen(false);
+                    setRepoInput('');
+                  }}
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  className={CLASSES.actionBtnCommit}
+                  disabled={!repoInput.trim()}
+                  onClick={() => {
+                    const next = repoInput.trim();
+                    setRepoPath(next);
+                    try { localStorage.setItem('git-dashboard-repo-path', next); } catch {}
+                    setRepoOpen(false);
+                    setRepoInput('');
+                    fetchState(true);
+                    fetchBranches(true);
+                    fetchRepos();
+                  }}
+                >
+                  OPEN REPO
                 </button>
               </div>
             </div>

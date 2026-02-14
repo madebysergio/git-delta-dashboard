@@ -17,6 +17,7 @@ const GIT_BIN = process.env.GIT_BIN || '/usr/bin/git';
 const MAX_COMMIT_ROWS = 100;
 const RECENT_COMMIT_ROWS = 25;
 const DIST_DIR = path.join(__dirname, 'dist');
+const DEFAULT_REPO_PARENT = path.dirname(DEFAULT_REPO);
 const VERSION_FILES = [
   path.join(__dirname, 'src', 'App.tsx'),
   path.join(__dirname, 'src', 'main.tsx'),
@@ -48,6 +49,31 @@ function resolveTarget(req: Request): string {
       ? req.body.repo
       : null;
   return repo ? path.resolve(repo) : DEFAULT_REPO;
+}
+
+function listKnownRepos(): Array<{ name: string; path: string }> {
+  const repos = new Map<string, string>();
+  const addRepo = (repoPath: string) => {
+    const abs = path.resolve(repoPath);
+    try {
+      const gitDir = path.join(abs, '.git');
+      if (!fs.existsSync(gitDir)) return;
+      repos.set(abs, path.basename(abs));
+    } catch {}
+  };
+
+  addRepo(DEFAULT_REPO);
+  try {
+    const entries = fs.readdirSync(DEFAULT_REPO_PARENT, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      addRepo(path.join(DEFAULT_REPO_PARENT, entry.name));
+    }
+  } catch {}
+
+  return Array.from(repos.entries())
+    .map(([repoPath, name]) => ({ name, path: repoPath }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function stateFileForRepo(dir: string): string {
@@ -338,6 +364,7 @@ async function getAheadBehind(dir: string, branch: string): Promise<{
 
 async function getRepoState(dir: string): Promise<{
   repository: string;
+  repositoryPath: string;
   branch: string;
   counts: { staged: number; modified: number; untracked: number; ahead: number; behind: number; recent: number };
   meta: { aheadMode: 'local' | 'upstream' };
@@ -358,6 +385,7 @@ async function getRepoState(dir: string): Promise<{
 
   return {
     repository: repoName,
+    repositoryPath: dir,
     branch,
     counts: {
       staged: staged.length,
@@ -404,6 +432,10 @@ app.get('/api/state', async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to read repository state' });
   }
+});
+
+app.get('/api/repos', (_req: Request, res: Response) => {
+  res.json({ repos: listKnownRepos() });
 });
 
 app.get('/api/branches', async (req: Request, res: Response) => {
