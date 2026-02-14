@@ -15,9 +15,6 @@ The interface is designed for quick scanning:
 
 - Live Git state API (`/api/state`) using `isomorphic-git`
 - Vite + React + TypeScript frontend
-- In-app branch controls:
-  - switch to existing branches
-  - create and switch to a new branch
 - Delta counters for:
   - `staged`
   - `unstaged`
@@ -27,12 +24,19 @@ The interface is designed for quick scanning:
 - Expandable detail panes:
   - file lists for staged/unstaged/untracked
   - commit lists for ahead/behind with per-commit file mapping
+- Commits feed push-state indicators:
+  - `READY FOR PUSH` for local unpushed commits
+  - `PUSHED` for commits already on remote
+  - `LAST PUSH ...` relative-time status in sort row
+- In-app branch controls:
+  - switch branch
+  - create and switch branch
 - In-app Git actions:
   - stage all
   - unstage all
-  - stage/unstage individual files
-  - commit (modal input required)
-  - push when ahead
+  - stage/unstage single file
+  - commit
+  - push
 - Ignore-aware untracked counting (`git.isIgnored`)
 - Dark mode toggle with persisted preference (`localStorage`)
 
@@ -107,15 +111,15 @@ Returns a frontend asset version token used for auto-reload checks.
 
 ### `GET /api/branches`
 
-Returns available local branches and current branch.
+Returns branch list and current branch for branch switching UI.
 
 ### `POST /api/checkout`
 
-Switches branch, or creates + switches when `create: true`.
+Switches to an existing branch or creates + switches when requested.
 
 ### `POST /api/add-all`
 
-Stages changes using Git semantics (`git add -A` behavior).
+Stages all tracked/untracked changes (`git add -A` semantics).
 
 ### `POST /api/unstage-all`
 
@@ -123,7 +127,7 @@ Unstages tracked staged changes.
 
 ### `POST /api/file-stage`
 
-Stages or unstages a single file.
+Stages or unstages an individual file.
 
 ### `POST /api/commit`
 
@@ -131,7 +135,9 @@ Creates a commit from staged changes (`message` required).
 
 ### `POST /api/push`
 
-Pushes local commits to the configured remote.
+Pushes local commits to remote.
+If branch has no upstream, server retries with:
+`git push --set-upstream origin <current-branch>`.
 
 ## Notes
 
