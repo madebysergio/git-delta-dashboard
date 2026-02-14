@@ -15,6 +15,9 @@ The interface is designed for quick scanning:
 
 - Live Git state API (`/api/state`) using `isomorphic-git`
 - Vite + React + TypeScript frontend
+- In-app branch controls:
+  - switch to existing branches
+  - create and switch to a new branch
 - Delta counters for:
   - `staged`
   - `unstaged`
@@ -24,6 +27,12 @@ The interface is designed for quick scanning:
 - Expandable detail panes:
   - file lists for staged/unstaged/untracked
   - commit lists for ahead/behind with per-commit file mapping
+- In-app Git actions:
+  - stage all
+  - unstage all
+  - stage/unstage individual files
+  - commit (modal input required)
+  - push when ahead
 - Ignore-aware untracked counting (`git.isIgnored`)
 - Dark mode toggle with persisted preference (`localStorage`)
 
@@ -95,6 +104,34 @@ Returns repository state with counters and details.
 ### `GET /api/version`
 
 Returns a frontend asset version token used for auto-reload checks.
+
+### `GET /api/branches`
+
+Returns available local branches and current branch.
+
+### `POST /api/checkout`
+
+Switches branch, or creates + switches when `create: true`.
+
+### `POST /api/add-all`
+
+Stages changes using Git semantics (`git add -A` behavior).
+
+### `POST /api/unstage-all`
+
+Unstages tracked staged changes.
+
+### `POST /api/file-stage`
+
+Stages or unstages a single file.
+
+### `POST /api/commit`
+
+Creates a commit from staged changes (`message` required).
+
+### `POST /api/push`
+
+Pushes local commits to the configured remote.
 
 ## Notes
 

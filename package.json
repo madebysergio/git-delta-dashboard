@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:api": "tsx server.ts",
+    "dev:api": "tsx watch server.ts",
     "dev:web": "vite",
     "build": "vite build",
     "preview": "vite preview",

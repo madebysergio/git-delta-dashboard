@@ -1,2 +1,60 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes feedDropFade {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.feed-enter {
+  animation: feedDropFade 220ms ease-out both;
+}
+
+@keyframes toastFadeUpOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.toast-leave {
+  animation: toastFadeUpOut 220ms ease-in forwards;
+}
+
+@keyframes repoDotPulse {
+  0% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2), 0 0 8px rgba(16, 185, 129, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.28), 0 0 16px rgba(16, 185, 129, 0.9);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2), 0 0 8px rgba(16, 185, 129, 0.55);
+    transform: scale(1);
+  }
+}
+
+.repo-dot {
+  animation: repoDotPulse 1.7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-enter {
+    animation: none;
+  }
+  .repo-dot {
+    animation: none;
+  }
+}
