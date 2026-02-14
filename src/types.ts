@@ -15,6 +15,7 @@ export type CommitDelta = {
 
 export type RepoState = {
   repository: string;
+  repositoryPath?: string;
   branch: string;
   counts: {
     staged: number;

@@ -31,6 +31,10 @@
   animation: toastFadeUpOut 220ms ease-in forwards;
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 @keyframes repoDotPulse {
   0% {
     box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2), 0 0 8px rgba(16, 185, 129, 0.55);
@@ -48,6 +52,15 @@
 
 .repo-dot {
   animation: repoDotPulse 1.7s ease-in-out infinite;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
