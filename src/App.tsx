@@ -253,8 +253,9 @@ function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; 
         </span>
 
         <span className={`${CLASSES.commitMessage} truncate`}>{item.message || item.oid.slice(0, 7)}</span>
-        <span className={`inline-flex items-center pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${hasManyFiles ? 'justify-end' : 'justify-between'}`}>
-          {!hasManyFiles ? (
+        <div className="mt-2 border-t border-slate-300/60 dark:border-slate-600/70" />
+        <span className={`inline-flex items-center pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${expandedMeta && !hasManyFiles ? 'justify-between' : 'justify-end'}`}>
+          {expandedMeta && !hasManyFiles ? (
             <span className={`${CLASSES.commitWhen} inline-flex items-center gap-1.5`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
                 <circle cx="12" cy="12" r="9" />
@@ -871,7 +872,7 @@ export default function App() {
             );
           })}
         </div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-slate-200/95 via-slate-200/70 to-transparent dark:from-slate-900/95 dark:via-slate-900/70" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-slate-200/70 via-slate-200/40 to-transparent dark:from-slate-900/70 dark:via-slate-900/40" />
         </section>
 
         {!expanded ? (
