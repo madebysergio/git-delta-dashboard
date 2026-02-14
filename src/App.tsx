@@ -963,26 +963,28 @@ export default function App() {
                       >
                         <span className="truncate">{b}</span>
                       </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${b}`}
-                        disabled={branchBusy || b === state.branch}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition-colors hover:bg-rose-100/70 disabled:cursor-default disabled:opacity-40 dark:text-rose-300 dark:hover:bg-rose-900/40"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setBranchMenuOpen(false);
-                          setBranchDeleteTarget(b);
-                          setBranchDeleteOpen(true);
-                        }}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4h8v2" />
-                          <path d="M19 6l-1 14H6L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                        </svg>
-                      </button>
+                      {b !== 'main' ? (
+                        <button
+                          type="button"
+                          aria-label={`Delete ${b}`}
+                          disabled={branchBusy || b === state.branch}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition-colors hover:bg-rose-100/70 disabled:cursor-default disabled:opacity-40 dark:text-rose-300 dark:hover:bg-rose-900/40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBranchMenuOpen(false);
+                            setBranchDeleteTarget(b);
+                            setBranchDeleteOpen(true);
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                            <path d="M3 6h18" />
+                            <path d="M8 6V4h8v2" />
+                            <path d="M19 6l-1 14H6L5 6" />
+                            <path d="M10 11v6" />
+                            <path d="M14 11v6" />
+                          </svg>
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                   <div className="my-1 border-t border-slate-300/70 dark:border-slate-700/70" />
@@ -1281,7 +1283,7 @@ export default function App() {
               <input
                 autoFocus
                 className="h-14 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold tracking-wide text-slate-900 outline-none placeholder:text-slate-500 focus:border-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                placeholder="/path/to/repo"
+                placeholder="https://github.com/org/repo.git"
                 value={repoInput}
                 onChange={(e) => setRepoInput(e.target.value)}
               />
@@ -1300,18 +1302,37 @@ export default function App() {
                   type="button"
                   className={CLASSES.actionBtnCommit}
                   disabled={!repoInput.trim()}
-                  onClick={() => {
-                    const next = repoInput.trim();
-                    setRepoPath(next);
-                    try { localStorage.setItem('git-dashboard-repo-path', next); } catch {}
-                    setRepoOpen(false);
-                    setRepoInput('');
-                    fetchState(true);
-                    fetchBranches(true);
-                    fetchRepos();
+                  onClick={async () => {
+                    const url = repoInput.trim();
+                    if (!url) return;
+                    try {
+                      setBranchBusy(true);
+                      const res = await fetch('/api/repo-clone', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                      });
+                      const payload = await parseJsonOrThrow(res);
+                      if (!res.ok) throw new Error(payload.error || 'clone failed');
+                      const next = String(payload.path || '');
+                      if (!next) throw new Error('clone failed');
+                      setRepoPath(next);
+                      try { localStorage.setItem('git-dashboard-repo-path', next); } catch {}
+                      setRepoOpen(false);
+                      setRepoInput('');
+                      await fetchState(true);
+                      await fetchBranches(true);
+                      await fetchRepos();
+                      showToast('Repository cloned');
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'clone failed');
+                      showToast('Clone failed', 2200);
+                    } finally {
+                      setBranchBusy(false);
+                    }
                   }}
                 >
-                  ADD REPO
+                  GIT CLONE
                 </button>
               </div>
             </div>

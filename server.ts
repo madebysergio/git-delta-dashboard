@@ -478,6 +478,10 @@ app.post('/api/branch-delete', async (req: Request, res: Response) => {
     return;
   }
   try {
+    if (branch === 'main') {
+      res.status(400).json({ error: 'Cannot delete main branch' });
+      return;
+    }
     const current = await safeCurrentBranch(target);
     if (current === branch) {
       res.status(400).json({ error: 'Cannot delete the current branch' });
@@ -488,6 +492,35 @@ app.post('/api/branch-delete', async (req: Request, res: Response) => {
     res.json({ ok: true, state });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to delete branch' });
+  }
+});
+
+app.post('/api/repo-clone', async (req: Request, res: Response) => {
+  const repoUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+  if (!repoUrl) {
+    res.status(400).json({ error: 'Repository URL is required' });
+    return;
+  }
+  try {
+    const repoNameRaw = repoUrl.split('/').pop() || '';
+    const repoName = repoNameRaw.replace(/\.git$/i, '').trim();
+    if (!repoName) {
+      res.status(400).json({ error: 'Invalid repository URL' });
+      return;
+    }
+    const destination = path.join(DEFAULT_REPO_PARENT, repoName);
+    if (fs.existsSync(destination)) {
+      res.status(400).json({ error: `Destination already exists: ${repoName}` });
+      return;
+    }
+    await runGitCommand(DEFAULT_REPO_PARENT, ['clone', repoUrl]);
+    res.json({
+      ok: true,
+      path: destination,
+      repos: listKnownRepos()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to clone repository' });
   }
 });
 
