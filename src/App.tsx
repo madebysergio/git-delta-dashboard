@@ -253,16 +253,35 @@ function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; 
         </span>
 
         <span className={`${CLASSES.commitMessage} truncate`}>{item.message || item.oid.slice(0, 7)}</span>
-
-        <div className={`w-full overflow-hidden transition-all duration-300 ${expandedMeta ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'}`}>
-          <span className={`${CLASSES.commitFooter} pt-2 ${hasManyFiles ? '' : 'justify-end'}`}>
-            <span className={`${CLASSES.commitWhen} ${hasManyFiles ? 'inline-flex items-center gap-1.5' : 'flex w-full items-center justify-end gap-1.5 text-right'}`}>
+        <span className={`inline-flex items-center pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${hasManyFiles ? 'justify-end' : 'justify-between'}`}>
+          {!hasManyFiles ? (
+            <span className={`${CLASSES.commitWhen} inline-flex items-center gap-1.5`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 7v5l3 2" />
               </svg>
               {committedWhen}
             </span>
+          ) : null}
+          <span className="inline-flex items-center gap-1.5">
+            <span>{expandedMeta ? 'Collapse' : 'Expand'}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 transition-transform duration-200 ${expandedMeta ? 'rotate-180' : ''}`}>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </span>
+
+        <div className={`w-full overflow-hidden transition-all duration-300 ${expandedMeta ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'}`}>
+          <span className={`${CLASSES.commitFooter} pt-2 ${hasManyFiles ? '' : 'justify-end'}`}>
+            {hasManyFiles ? (
+              <span className={`${CLASSES.commitWhen} inline-flex items-center gap-1.5`}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+                {committedWhen}
+              </span>
+            ) : <span />}
             {hasManyFiles ? (
             <button
               type="button"
