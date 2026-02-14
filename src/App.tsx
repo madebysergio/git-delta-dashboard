@@ -366,7 +366,7 @@ export default function App() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
-  const [busyAction, setBusyAction] = useState<'add' | 'unstage' | 'commit' | 'push' | null>(null);
+  const [busyAction, setBusyAction] = useState<'add' | 'unstage' | 'commit' | 'push' | 'pull' | null>(null);
   const [busyFile, setBusyFile] = useState<string | null>(null);
   const [branchBusy, setBranchBusy] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
@@ -663,6 +663,7 @@ export default function App() {
   const canAddAll = hasAddableChanges || state.counts.staged > 0;
   const canCommit = state.counts.staged > 0;
   const canPush = state.counts.ahead > 0;
+  const canPull = state.counts.behind > 0;
   const isCommitsView = expanded === 'ahead' || expanded === 'behind';
   const addAllLabel = expanded === 'modified' || expanded === 'untracked' ? 'STAGE ALL' : 'ADD ALL';
   const canUnstageAll = expanded === 'staged' && state.counts.staged > 0;
@@ -766,6 +767,28 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'action failed');
       showToast('Action failed', 2200);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function runPull() {
+    try {
+      setBusyAction('pull');
+      setError('');
+      showToast('Pulling latest changes...');
+      const res = await fetch('/api/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyWithRepo({}))
+      });
+      const payload = await parseJsonOrThrow(res);
+      if (!res.ok) throw new Error(payload.error || 'pull failed');
+      await fetchState(true);
+      showToast('Pull complete');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'pull failed');
+      showToast('Pull failed', 2200);
     } finally {
       setBusyAction(null);
     }
@@ -925,7 +948,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className={`${CLASSES.branch} flex items-center justify-start gap-2`}>
+          <div className={`${CLASSES.branch} flex items-center justify-between gap-2`}>
             <span ref={branchMenuRef} className="relative inline-flex min-w-0 max-w-full items-center gap-2">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <circle cx="6" cy="6" r="2" />
@@ -1001,6 +1024,22 @@ export default function App() {
                 </div>
               ) : null}
             </span>
+            <button
+              type="button"
+              className="group inline-flex h-14 w-fit rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
+              disabled={busyAction !== null || branchBusy || !canPull}
+              onClick={runPull}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                  <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
+                  <path d="M3 21v-5h5" />
+                </svg>
+                <span>PULL</span>
+              </span>
+            </button>
           </div>
         </header>
         <section className={CLASSES.actions}>
