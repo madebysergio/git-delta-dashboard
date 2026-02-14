@@ -372,6 +372,8 @@ export default function App() {
   const [branches, setBranches] = useState<string[]>([]);
   const [branchInput, setBranchInput] = useState('');
   const [branchOpen, setBranchOpen] = useState(false);
+  const [branchDeleteOpen, setBranchDeleteOpen] = useState(false);
+  const [branchDeleteTarget, setBranchDeleteTarget] = useState('');
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [repos, setRepos] = useState<Array<{ name: string; path: string }>>([]);
   const [repoPath, setRepoPath] = useState<string>(() => {
@@ -691,6 +693,31 @@ export default function App() {
     }
   }
 
+  async function deleteBranch(branch: string): Promise<boolean> {
+    const target = branch.trim();
+    if (!target || target === state.branch) return false;
+    try {
+      setBranchBusy(true);
+      const res = await fetch('/api/branch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyWithRepo({ branch: target }))
+      });
+      const payload = await parseJsonOrThrow(res);
+      if (!res.ok) throw new Error(payload.error || 'delete failed');
+      await fetchState(true);
+      await fetchBranches(true);
+      showToast(`Deleted ${target}`);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'delete failed');
+      showToast('Branch delete failed', 2200);
+      return false;
+    } finally {
+      setBranchBusy(false);
+    }
+  }
+
   async function runAction(action: 'add' | 'unstage' | 'commit' | 'push') {
     try {
       setBusyAction(action);
@@ -886,7 +913,7 @@ export default function App() {
                         setRepoOpen(true);
                       }}
                     >
-                      Choose Folder...
+                      Add Repo...
                     </button>
                   </div>
                 ) : null}
@@ -924,18 +951,39 @@ export default function App() {
               {branchMenuOpen ? (
                 <div className="absolute left-0 top-full z-[9999] mt-2 min-w-[220px] rounded-xl border border-slate-300 bg-slate-50 p-1 shadow-[0_12px_28px_-14px_rgba(15,23,42,0.35)] dark:border-slate-700 dark:bg-slate-900">
                   {branchItems.map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-800 transition-colors hover:bg-slate-200/70 dark:text-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => {
-                        setBranchMenuOpen(false);
-                        if (b === state.branch) return;
-                        checkoutBranch(b, false);
-                      }}
-                    >
-                      {b}
-                    </button>
+                    <div key={b} className="flex w-full items-center gap-1 rounded-lg px-1 py-0.5 hover:bg-slate-200/70 dark:hover:bg-slate-800">
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center rounded-md px-2 py-2 text-left text-sm text-slate-800 dark:text-slate-100"
+                        onClick={() => {
+                          setBranchMenuOpen(false);
+                          if (b === state.branch) return;
+                          checkoutBranch(b, false);
+                        }}
+                      >
+                        <span className="truncate">{b}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${b}`}
+                        disabled={branchBusy || b === state.branch}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition-colors hover:bg-rose-100/70 disabled:cursor-default disabled:opacity-40 dark:text-rose-300 dark:hover:bg-rose-900/40"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBranchMenuOpen(false);
+                          setBranchDeleteTarget(b);
+                          setBranchDeleteOpen(true);
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
                   ))}
                   <div className="my-1 border-t border-slate-300/70 dark:border-slate-700/70" />
                   <button
@@ -958,7 +1006,7 @@ export default function App() {
 
         <section className={CLASSES.countersWrap}>
         <div
-          className={CLASSES.counters}
+          className={`${CLASSES.counters} hide-scrollbar`}
           ref={countersRef}
           onMouseMove={(e) => {
             const el = countersRef.current;
@@ -1020,7 +1068,11 @@ export default function App() {
           <section className={CLASSES.panelShell}>
             {expanded === 'ahead' ? (
               <div className="flex items-center justify-between px-3 pt-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 opacity-80 dark:text-slate-400">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 opacity-80 dark:text-slate-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M12 19V5" />
+                    <path d="m7 10 5-5 5 5" />
+                  </svg>
                   {lastPushedLabel}
                 </span>
                 <button
@@ -1259,7 +1311,44 @@ export default function App() {
                     fetchRepos();
                   }}
                 >
-                  OPEN REPO
+                  ADD REPO
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {branchDeleteOpen ? (
+          <section className={CLASSES.modalBackdrop}>
+            <div className={CLASSES.modal}>
+              <div className={CLASSES.modalTitle}>Delete Branch</div>
+              <div className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                Delete <span className="font-semibold">{branchDeleteTarget}</span>? This cannot be undone.
+              </div>
+              <div className={CLASSES.modalRow}>
+                <button
+                  type="button"
+                  className={CLASSES.actionBtnFull}
+                  onClick={() => {
+                    setBranchDeleteOpen(false);
+                    setBranchDeleteTarget('');
+                  }}
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  className="group h-14 w-full rounded-full border border-rose-400 bg-rose-100 px-3 text-xs font-semibold uppercase tracking-wide text-rose-800 transition-colors duration-200 enabled:hover:bg-rose-200 enabled:active:bg-rose-300 disabled:cursor-default disabled:opacity-50 dark:border-rose-500 dark:bg-rose-800/60 dark:text-white dark:enabled:hover:bg-rose-700 dark:enabled:active:bg-rose-600"
+                  disabled={branchBusy || !branchDeleteTarget}
+                  onClick={async () => {
+                    const ok = await deleteBranch(branchDeleteTarget);
+                    if (ok) {
+                      setBranchDeleteOpen(false);
+                      setBranchDeleteTarget('');
+                    }
+                  }}
+                >
+                  DELETE BRANCH
                 </button>
               </div>
             </div>

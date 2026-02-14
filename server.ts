@@ -470,6 +470,27 @@ app.post('/api/checkout', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/branch-delete', async (req: Request, res: Response) => {
+  const target = resolveTarget(req);
+  const branch = typeof req.body?.branch === 'string' ? req.body.branch.trim() : '';
+  if (!branch) {
+    res.status(400).json({ error: 'Branch name is required' });
+    return;
+  }
+  try {
+    const current = await safeCurrentBranch(target);
+    if (current === branch) {
+      res.status(400).json({ error: 'Cannot delete the current branch' });
+      return;
+    }
+    await runGitCommand(target, ['branch', '-D', branch]);
+    const state = await getRepoState(target);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to delete branch' });
+  }
+});
+
 app.post('/api/add-all', async (req: Request, res: Response) => {
   const target = resolveTarget(req);
   try {

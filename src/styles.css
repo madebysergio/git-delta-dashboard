@@ -54,6 +54,15 @@ button:not(:disabled) {
   animation: repoDotPulse 1.7s ease-in-out infinite;
 }
 
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .feed-enter {
     animation: none;
