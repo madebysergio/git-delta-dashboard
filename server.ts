@@ -278,7 +278,7 @@ async function getAheadBehind(dir: string, branch: string): Promise<{
   }
 
   const localRef = `refs/heads/${branch}`;
-  let remoteRef = null;
+  let remoteRef: string | null = null;
   try {
     const remoteName = await git.getConfig({ fs, dir, path: `branch.${branch}.remote` });
     const mergeRef = await git.getConfig({ fs, dir, path: `branch.${branch}.merge` });
@@ -286,11 +286,22 @@ async function getAheadBehind(dir: string, branch: string): Promise<{
       remoteRef = `refs/remotes/${remoteName}/${mergeRef.slice('refs/heads/'.length)}`;
     }
   } catch {}
-  if (!remoteRef) {
-    remoteRef = `refs/remotes/origin/${branch}`;
-  }
   const localOid = await readRefOid(dir, localRef);
-  const remoteOid = await readRefOid(dir, remoteRef);
+  const remoteCandidates = [
+    remoteRef,
+    `refs/remotes/origin/${branch}`,
+    'refs/remotes/origin/HEAD'
+  ].filter((x): x is string => Boolean(x));
+  let resolvedRemoteRef: string | null = null;
+  let remoteOid: string | null = null;
+  for (const candidate of remoteCandidates) {
+    const oid = await readRefOid(dir, candidate);
+    if (oid) {
+      resolvedRemoteRef = candidate;
+      remoteOid = oid;
+      break;
+    }
+  }
 
   if (!localOid || !remoteOid) {
     // No upstream reference available for this branch, so we can't compute true ahead/behind.
@@ -300,7 +311,7 @@ async function getAheadBehind(dir: string, branch: string): Promise<{
 
   const [localMap, remoteMap] = await Promise.all([
     readCommitMap(dir, localRef),
-    readCommitMap(dir, remoteRef)
+    readCommitMap(dir, resolvedRemoteRef as string)
   ]);
 
   let baseOid = null;

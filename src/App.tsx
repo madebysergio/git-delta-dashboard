@@ -230,7 +230,16 @@ function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; 
                 </svg>
                 PUSHED
               </span>
-            ) : null}
+            ) : (
+              <span className="inline-flex self-start items-center gap-1.5 rounded-full border border-amber-400 bg-amber-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-500 dark:bg-amber-900/30 dark:text-amber-200">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+                READY FOR PUSH
+              </span>
+            )}
           </span>
           <span className="inline-flex items-center gap-2 rounded-full border border-slate-500 px-3 py-2.5 text-xs font-semibold tracking-wide text-slate-200 dark:border-slate-500 dark:text-slate-200">
             <span className="font-semibold text-emerald-500 dark:text-emerald-300">+{stat(item.additions)}</span>
@@ -638,25 +647,18 @@ export default function App() {
   }
   if (expanded === 'ahead') {
     const aheadSet = new Set(state.details.ahead.map((c) => c.oid));
-    const ordered = [...state.details.ahead, ...(state.details.recent || [])];
-    const seen = new Set<string>();
-    const unique = ordered.filter((item) => {
-      if (seen.has(item.oid)) return false;
-      seen.add(item.oid);
-      return true;
-    });
-    detailRows = unique
-      .filter((item) => {
-        const isPushed = !aheadSet.has(item.oid);
-        if (commitFilter === 'pushed' && !isPushed) return false;
-        if (commitFilter === 'unpushed' && isPushed) return false;
-        return true;
-      })
-      .map((item, idx) => {
-        const byAheadSet = !aheadSet.has(item.oid);
-        const byPosition = idx >= state.counts.ahead;
-        return <CommitRow item={item} nowMs={nowMs} pushed={byAheadSet || byPosition} key={item.oid} />;
-      });
+    const byNewest = (a: CommitDelta, b: CommitDelta) => (b.ts || 0) - (a.ts || 0);
+    const pushedOnly = (state.details.recent || []).filter((c) => !aheadSet.has(c.oid)).sort(byNewest);
+    const unpushedOnly = [...state.details.ahead].sort(byNewest);
+    const selected = commitFilter === 'unpushed'
+      ? unpushedOnly
+      : commitFilter === 'pushed'
+        ? pushedOnly
+        : [...unpushedOnly, ...pushedOnly];
+
+    detailRows = selected.map((item) => (
+      <CommitRow item={item} nowMs={nowMs} pushed={!aheadSet.has(item.oid)} key={item.oid} />
+    ));
   }
   if (expanded === 'behind') detailRows = state.details.behind.map((item) => <CommitRow item={item} nowMs={nowMs} pushed={true} key={item.oid} />);
 
