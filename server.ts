@@ -639,6 +639,17 @@ app.post('/api/push', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/pull', async (req: Request, res: Response) => {
+  const target = resolveTarget(req);
+  try {
+    await runGitCommand(target, ['pull']);
+    const state = await getRepoState(target);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to pull changes' });
+  }
+});
+
 app.post('/api/file-stage', async (req: Request, res: Response) => {
   const target = resolveTarget(req);
   const file = typeof req.body?.file === 'string' ? req.body.file : '';
