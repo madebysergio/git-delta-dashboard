@@ -531,7 +531,25 @@ app.post('/api/push', async (req: Request, res: Response) => {
     const state = await getRepoState(target);
     res.json({ ok: true, state });
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to push changes' });
+    const message = error instanceof Error ? error.message : 'Failed to push changes';
+    const noUpstream = /has no upstream branch/i.test(message);
+    if (noUpstream) {
+      try {
+        const branch = await safeCurrentBranch(target);
+        if (!branch || branch.startsWith('(')) {
+          res.status(500).json({ error: 'Failed to push changes: missing current branch for upstream setup' });
+          return;
+        }
+        await runGitCommand(target, ['push', '--set-upstream', 'origin', branch]);
+        const state = await getRepoState(target);
+        res.json({ ok: true, state, upstreamSet: true });
+        return;
+      } catch (fallbackError) {
+        res.status(500).json({ error: fallbackError instanceof Error ? fallbackError.message : 'Failed to push changes' });
+        return;
+      }
+    }
+    res.status(500).json({ error: message });
   }
 });
 
