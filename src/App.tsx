@@ -801,7 +801,7 @@ export default function App() {
           </section>
         )}
 
-        {!isCommitsView && (canAddAll || canCommit || canPush) ? (
+        {((!isCommitsView && (canAddAll || canCommit || canPush)) || (isCommitsView && canPush)) ? (
           <section className={CLASSES.actionFooter} ref={footerRef}>
             <div className="flex flex-col gap-2">
               {canUnstageAll ? (
@@ -844,7 +844,7 @@ export default function App() {
                   </span>
                 </button>
               ) : null}
-              {canCommit ? (
+              {!isCommitsView && canCommit ? (
                 <button
                   type="button"
                   className={CLASSES.actionBtnCommit}
@@ -862,7 +862,7 @@ export default function App() {
                   </span>
                 </button>
               ) : null}
-              {canPush && !commitOpen ? (
+              {canPush ? (
                 <button
                   type="button"
                   className={CLASSES.actionBtnPush}
@@ -926,29 +926,6 @@ export default function App() {
                     <span>COMMIT</span>
                   </span>
                 </button>
-                {canPush && commitMessage.trim() ? (
-                  <button
-                    type="button"
-                    className={CLASSES.actionBtnPush}
-                    disabled={busyAction !== null}
-                    onClick={() => runAction('push')}
-                  >
-                    <span className="inline-flex items-center justify-center">
-                      <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                          <circle cx="6" cy="12" r="2.5" />
-                          <circle cx="18" cy="6" r="2.5" />
-                          <circle cx="18" cy="18" r="2.5" />
-                          <path d="M8.5 11 15.5 7.2" />
-                          <path d="M8.5 13 15.5 16.8" />
-                          <path d="M18 3.5v5" />
-                          <path d="m16 6.5 2-3 2 3" />
-                        </svg>
-                      </span>
-                      <span>PUSH</span>
-                    </span>
-                  </button>
-                ) : null}
               </div>
             </div>
           </section>
