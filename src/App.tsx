@@ -1069,7 +1069,7 @@ export default function App() {
         ) : (
           <section className={CLASSES.panelShell}>
             {expanded === 'ahead' ? (
-              <div className="flex items-center justify-between px-3 pt-3">
+              <div className="flex items-center justify-between px-3 pb-2 pt-3">
                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 opacity-80 dark:text-slate-400">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                     <path d="M12 19V5" />
