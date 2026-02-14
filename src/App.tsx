@@ -37,7 +37,7 @@ const CLASSES = {
   counterUntracked: '!border-fuchsia-600 !bg-fuchsia-600 !text-white ring-2 ring-fuchsia-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-fuchsia-400 dark:!text-white dark:ring-0',
   counterCommits: '!border-emerald-500 !bg-emerald-500 !text-white ring-0 shadow-none dark:!border-slate-600 dark:!bg-emerald-500 dark:!text-white dark:ring-0',
   counterUnstaged: '!border-rose-600 !bg-rose-600 !text-white ring-2 ring-rose-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-rose-400 dark:!text-white dark:ring-0',
-  counterLabel: 'text-xs font-normal uppercase tracking-wide text-slate-700 dark:text-slate-300',
+  counterLabel: 'text-xs font-medium uppercase tracking-wide text-slate-700 dark:text-slate-300',
   counterValue: 'text-2xl font-medium leading-none tracking-tight tabular-nums',
   empty: 'flex h-full items-center justify-center px-4 text-center text-lg text-slate-700 dark:text-slate-300',
   panelShell: 'relative h-full min-h-0 overflow-hidden',
@@ -842,7 +842,7 @@ export default function App() {
                 }}
               >
                 <span className="inline-flex items-center justify-center">
-                  <Icon kind={g.icon} className="h-7 w-7" />
+                  <Icon kind={g.icon} className={g.id === 'ahead' ? 'h-7 w-7' : 'h-6 w-6'} />
                 </span>
                 <span className={`${CLASSES.counterValue} text-center`}>{g.value}</span>
                 <span className={`${labelClass} pl-2`}>
