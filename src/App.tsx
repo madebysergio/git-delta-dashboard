@@ -31,7 +31,7 @@ const CLASSES = {
   modalTitle: 'text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-slate-100',
   modalRow: 'mt-3 flex flex-col gap-2',
   counters: 'flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-5',
-  counter: 'group flex min-w-[146px] cursor-pointer items-center justify-between rounded-full border border-slate-300 bg-slate-100 px-3 py-2.5 text-left transition-colors duration-200 enabled:hover:border-slate-400 enabled:hover:bg-slate-50 enabled:active:bg-slate-200 disabled:cursor-default disabled:opacity-55 dark:border-slate-700 dark:bg-slate-800/90 dark:enabled:hover:border-slate-600 dark:enabled:hover:bg-slate-700/70 dark:enabled:active:bg-slate-700 sm:min-w-[160px]',
+  counter: 'group flex min-w-[146px] cursor-pointer items-center justify-between rounded-full border border-slate-300 bg-slate-100 px-5 py-2.5 text-left transition-colors duration-200 enabled:hover:border-slate-400 enabled:hover:bg-slate-50 enabled:active:bg-slate-200 disabled:cursor-default disabled:opacity-55 dark:border-slate-700 dark:bg-slate-800/90 dark:enabled:hover:border-slate-600 dark:enabled:hover:bg-slate-700/70 dark:enabled:active:bg-slate-700 sm:min-w-[160px]',
   counterActive: '!border-amber-500 !bg-amber-500 !text-white ring-2 ring-amber-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-amber-400 dark:!text-white dark:ring-0',
   counterUntracked: '!border-fuchsia-600 !bg-fuchsia-600 !text-white ring-2 ring-fuchsia-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-fuchsia-400 dark:!text-white dark:ring-0',
   counterCommits: '!border-emerald-500 !bg-emerald-500 !text-white ring-0 shadow-none dark:!border-slate-600 dark:!bg-emerald-500 dark:!text-white dark:ring-0',
@@ -51,7 +51,7 @@ const CLASSES = {
   commitFiles: 'ml-1 flex min-w-0 flex-col gap-1',
   commitFile: 'flex items-center justify-between gap-2 text-base text-slate-700 dark:text-slate-300',
   commitWhen: 'whitespace-nowrap text-xs text-slate-500 dark:text-slate-400',
-  commitFooter: 'flex items-center justify-between gap-3',
+  commitFooter: 'flex w-full items-center justify-between',
   file: 'truncate text-base text-slate-900 dark:text-slate-100',
   delta: 'whitespace-nowrap text-base text-slate-700 dark:text-slate-300',
   err: 'm-0 p-4 text-base text-red-600 dark:text-red-400'
@@ -208,10 +208,14 @@ function FileRow({
 function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; pushed: boolean }) {
   const committedWhen = formatCommitWhen(item.ts, nowMs);
   const hasManyFiles = (item.files?.length || 0) >= 4;
-  const [open, setOpen] = useState(!hasManyFiles);
+  const [open, setOpen] = useState(false);
+  const [expandedMeta, setExpandedMeta] = useState(false);
 
   return (
-    <li className={`${CLASSES.row} feed-enter items-start`}>
+    <li
+      className={`${CLASSES.row} feed-enter items-start cursor-pointer`}
+      onClick={() => setExpandedMeta((v) => !v)}
+    >
       <span className={CLASSES.commitBlock}>
         <span className={CLASSES.commitTagLine}>
           <span className="inline-flex items-center gap-2">
@@ -247,50 +251,75 @@ function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; 
           </span>
         </span>
 
-        <span className={CLASSES.commitMessage}>{item.message || item.oid.slice(0, 7)}</span>
+        <span className={`${CLASSES.commitMessage} truncate`}>{item.message || item.oid.slice(0, 7)}</span>
 
-        <span className={CLASSES.commitFooter}>
-          <span className={`${CLASSES.commitWhen} inline-flex items-center gap-1.5`}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-            {committedWhen}
+        <div className={`w-full overflow-hidden transition-all duration-300 ${expandedMeta ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'}`}>
+          <span className={`${CLASSES.commitFooter} pt-2 ${hasManyFiles ? '' : 'justify-end'}`}>
+            <span className={`${CLASSES.commitWhen} ${hasManyFiles ? 'inline-flex items-center gap-1.5' : 'flex w-full items-center justify-end gap-1.5 text-right'}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              {committedWhen}
+            </span>
+            {hasManyFiles ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-4 text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors duration-200 hover:text-slate-800 active:text-slate-900 dark:text-slate-300/70 dark:hover:text-slate-200 dark:active:text-slate-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen((v) => !v);
+              }}
+            >
+                <span className="inline-flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-full border border-slate-500 pl-3 pr-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition-colors duration-200 hover:bg-slate-100 active:bg-slate-200 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-700/50 dark:active:bg-slate-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                    <path d="M14 3v6h6" />
+                  </svg>
+                  <span className="ml-1">{item.files.length}</span>
+                  <span className="ml-1">FILES</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`ml-3 h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`}>
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                  </span>
+            </button>
+            ) : <span />}
           </span>
-          {hasManyFiles ? (
-          <button
-            type="button"
-            className="inline-flex items-center gap-4 text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors duration-200 hover:text-slate-800 active:text-slate-900 dark:text-slate-300/70 dark:hover:text-slate-200 dark:active:text-slate-100"
-            onClick={() => setOpen((v) => !v)}
-          >
-              <span className="inline-flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-full border border-slate-500 pl-3 pr-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition-colors duration-200 hover:bg-slate-100 active:bg-slate-200 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-700/50 dark:active:bg-slate-700">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                  <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                  <path d="M14 3v6h6" />
-                </svg>
-                <span className="ml-1">{item.files.length}</span>
-                <span className="ml-1">FILES</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`ml-3 h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`}>
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </span>
-          </button>
-          ) : <span />}
-        </span>
 
-        {open ? (
-          <ul className={CLASSES.commitFiles}>
-            {item.files?.map((f) => (
-              <li key={`${item.oid}-${f.file}`} className={CLASSES.commitFile}>
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="font-semibold text-emerald-500 dark:text-emerald-300">+{stat(f.additions)}</span>
-                  <span className="font-semibold text-rose-500 dark:text-rose-300">-{stat(f.deletions)}</span>
-                </span>
-                <span className="truncate">{f.file}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+          {expandedMeta && !hasManyFiles ? (
+            <>
+              <div className="my-2 border-t border-slate-300/60 dark:border-slate-600/70" />
+              <ul className={CLASSES.commitFiles}>
+              {item.files?.map((f) => (
+                <li key={`${item.oid}-${f.file}`} className={CLASSES.commitFile}>
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="font-semibold text-emerald-500 dark:text-emerald-300">+{stat(f.additions)}</span>
+                    <span className="font-semibold text-rose-500 dark:text-rose-300">-{stat(f.deletions)}</span>
+                  </span>
+                  <span className="truncate">{f.file}</span>
+                </li>
+              ))}
+            </ul>
+            </>
+          ) : null}
+
+          {open ? (
+            <>
+              <div className="my-2 border-t border-slate-300/60 dark:border-slate-600/70" />
+              <ul className={CLASSES.commitFiles}>
+              {item.files?.map((f) => (
+                <li key={`${item.oid}-${f.file}`} className={CLASSES.commitFile}>
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="font-semibold text-emerald-500 dark:text-emerald-300">+{stat(f.additions)}</span>
+                    <span className="font-semibold text-rose-500 dark:text-rose-300">-{stat(f.deletions)}</span>
+                  </span>
+                  <span className="truncate">{f.file}</span>
+                </li>
+              ))}
+            </ul>
+            </>
+          ) : null}
+        </div>
       </span>
     </li>
   );
@@ -765,8 +794,10 @@ export default function App() {
                 }}
               >
                 <span className={CLASSES.counterValue}>{g.value}</span>
-                <span className={`${labelClass} inline-flex items-center gap-1.5`}>
-                  <Icon kind={g.icon} className="h-3.5 w-3.5" />
+                <span className={`${labelClass} inline-flex items-center gap-2`}>
+                  <span className="inline-flex w-4 items-center justify-center">
+                    <Icon kind={g.icon} className="h-3.5 w-3.5" />
+                  </span>
                   {g.label}
                 </span>
               </button>
@@ -782,11 +813,11 @@ export default function App() {
               <div className="flex justify-end px-3 pt-3">
                 <button
                   type="button"
-                  className={CLASSES.actionBtn}
+                  className={`${CLASSES.actionBtn} ${commitFilter === 'all' ? 'bg-slate-200 opacity-70 hover:bg-slate-200 active:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-900 dark:active:bg-slate-900' : ''}`}
                   onClick={() => setCommitFilter((p) => (p === 'all' ? 'unpushed' : p === 'unpushed' ? 'pushed' : 'all'))}
                 >
-                  <span className="inline-flex items-center gap-1.5">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                  <span className={`inline-flex items-center gap-1.5 ${commitFilter === 'all' ? 'opacity-80' : ''}`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${commitFilter === 'all' ? 'opacity-80' : ''}`}>
                       <path d="M11 5h9" />
                       <path d="M11 12h7" />
                       <path d="M11 19h5" />
