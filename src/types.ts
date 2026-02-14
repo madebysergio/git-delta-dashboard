@@ -22,9 +22,11 @@ export type RepoState = {
     untracked: number;
     ahead: number;
     behind: number;
+    recent: number;
   };
   meta?: {
     aheadMode?: 'local' | 'upstream';
+    trackedPending?: string[];
   };
   details: {
     staged: FileDelta[];
@@ -32,5 +34,6 @@ export type RepoState = {
     untracked: Array<{ file: string }>;
     ahead: CommitDelta[];
     behind: CommitDelta[];
+    recent: CommitDelta[];
   };
 };
