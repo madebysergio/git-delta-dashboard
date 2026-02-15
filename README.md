@@ -31,6 +31,11 @@ The interface is designed for quick scanning:
 - In-app branch controls:
   - switch branch
   - create and switch branch
+  - delete branch (with safeguards)
+  - pull latest from current branch
+- Multi-repo controls:
+  - select local repo from custom dropdown
+  - clone repo from URL (`GIT CLONE`) into local repo root
 - In-app Git actions:
   - stage all
   - unstage all
@@ -113,9 +118,25 @@ Returns a frontend asset version token used for auto-reload checks.
 
 Returns branch list and current branch for branch switching UI.
 
+### `POST /api/branch-delete`
+
+Deletes a branch by name.
+
+Safeguards:
+- cannot delete current branch
+- cannot delete `main`
+
 ### `POST /api/checkout`
 
 Switches to an existing branch or creates + switches when requested.
+
+### `POST /api/pull`
+
+Pulls latest changes for the current branch.
+
+### `POST /api/repo-clone`
+
+Clones a repository from URL into the local repo discovery root and returns cloned path/repo list.
 
 ### `POST /api/add-all`
 
@@ -143,3 +164,4 @@ If branch has no upstream, server retries with:
 
 - If `dist/` is missing and you run `npm run start`, frontend routes return a build-not-found error.
 - In development, use `http://localhost:5173` for the UI.
+- During branch switching, brief backend restarts can occur in watch mode; UI includes transient suppression and branch-switch loading feedback.
