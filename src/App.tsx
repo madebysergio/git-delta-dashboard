@@ -996,8 +996,8 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className={`${CLASSES.branch} grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
-            <span ref={branchMenuRef} className="relative inline-flex min-w-0 max-w-full items-center gap-2">
+          <div className={`${CLASSES.branch} grid min-w-0 grid-cols-[65%_1fr] items-center gap-3`}>
+            <span ref={branchMenuRef} className="relative inline-flex min-w-0 w-full items-center gap-3">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <circle cx="6" cy="6" r="2" />
                 <circle cx="18" cy="6" r="2" />
@@ -1007,7 +1007,7 @@ export default function App() {
               </svg>
                 <button
                   type="button"
-                className="inline-flex min-w-0 max-w-full flex-1 items-center gap-1 text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
+                className="inline-flex w-full min-w-0 items-center justify-between gap-2 text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
                 disabled={branchBusy}
                 onClick={() => {
                   setBranchMenuOpen((v) => !v);
@@ -1016,7 +1016,7 @@ export default function App() {
               >
                 <span
                   ref={branchScrollRef}
-                  className="hide-scrollbar block min-w-0 w-[60vw] max-w-[60vw] overflow-x-auto whitespace-nowrap"
+                  className="hide-scrollbar block min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-left"
                   onMouseEnter={startBranchMarquee}
                   onMouseLeave={() => stopBranchMarquee(true)}
                 >
@@ -1086,17 +1086,19 @@ export default function App() {
             </span>
             <button
               type="button"
-              className="group inline-flex h-14 w-fit shrink-0 rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
+              className="group inline-flex h-14 w-full rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
               disabled={busyAction !== null || branchBusy || !canPull}
               onClick={runPull}
             >
-              <span className="inline-flex items-center gap-1.5">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                  <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8" />
-                  <path d="M21 3v5h-5" />
-                  <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
-                  <path d="M3 21v-5h5" />
-                </svg>
+              <span className="inline-flex w-full items-center justify-center gap-1.5">
+                <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8" />
+                    <path d="M21 3v5h-5" />
+                    <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
+                    <path d="M3 21v-5h5" />
+                  </svg>
+                </span>
                 <span>PULL</span>
               </span>
             </button>
@@ -1210,7 +1212,7 @@ export default function App() {
                   onClick={() => runAction('unstage')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <circle cx="6" cy="6" r="2.5" />
                         <circle cx="18" cy="12" r="2.5" />
@@ -1232,7 +1234,7 @@ export default function App() {
                   onClick={() => runAction('add')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
                         <path d="M14 3v5h5" />
@@ -1252,7 +1254,7 @@ export default function App() {
                   onClick={() => setCommitOpen(true)}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <line x1="4" y1="12" x2="20" y2="12" />
                         <circle cx="12" cy="12" r="3.5" />
@@ -1270,7 +1272,7 @@ export default function App() {
                   onClick={() => runAction('push')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <circle cx="6" cy="12" r="2.5" />
                         <circle cx="18" cy="6" r="2.5" />
