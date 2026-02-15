@@ -374,6 +374,7 @@ export default function App() {
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchDeleteOpen, setBranchDeleteOpen] = useState(false);
   const [branchDeleteTarget, setBranchDeleteTarget] = useState('');
+  const [branchSwitching, setBranchSwitching] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [repos, setRepos] = useState<Array<{ name: string; path: string }>>([]);
   const [repoPath, setRepoPath] = useState<string>(() => {
@@ -395,8 +396,12 @@ export default function App() {
   const countersRef = useRef<HTMLElement | null>(null);
   const repoMenuRef = useRef<HTMLSpanElement | null>(null);
   const branchMenuRef = useRef<HTMLSpanElement | null>(null);
+  const branchScrollRef = useRef<HTMLSpanElement | null>(null);
   const counterAutoDir = useRef<0 | 1 | -1>(0);
   const counterAutoRaf = useRef<number | null>(null);
+  const branchMarqueeTimer = useRef<number | null>(null);
+  const branchMarqueeDir = useRef<1 | -1>(1);
+  const transientSuppressUntil = useRef(0);
 
   const showToast = useCallback((message: string, ttlMs = 4600) => {
     const id = toastId.current++;
@@ -459,6 +464,7 @@ export default function App() {
       for (const t of toastTimers.current.values()) window.clearTimeout(t);
       toastTimers.current.clear();
       if (counterAutoRaf.current !== null) window.cancelAnimationFrame(counterAutoRaf.current);
+      if (branchMarqueeTimer.current !== null) window.clearInterval(branchMarqueeTimer.current);
     };
   }, []);
 
@@ -505,6 +511,40 @@ export default function App() {
       counterAutoRaf.current = window.requestAnimationFrame(tick);
     };
     counterAutoRaf.current = window.requestAnimationFrame(tick);
+  }, []);
+
+  const stopBranchMarquee = useCallback((reset = false) => {
+    if (branchMarqueeTimer.current !== null) {
+      window.clearInterval(branchMarqueeTimer.current);
+      branchMarqueeTimer.current = null;
+    }
+    if (reset && branchScrollRef.current) branchScrollRef.current.scrollLeft = 0;
+  }, []);
+
+  const startBranchMarquee = useCallback(() => {
+    const el = branchScrollRef.current;
+    if (!el) return;
+    if (el.scrollWidth <= el.clientWidth) return;
+    if (branchMarqueeTimer.current !== null) return;
+    branchMarqueeDir.current = 1;
+    branchMarqueeTimer.current = window.setInterval(() => {
+      const node = branchScrollRef.current;
+      if (!node) return;
+      const max = Math.max(0, node.scrollWidth - node.clientWidth);
+      if (max <= 0) return;
+      const next = node.scrollLeft + branchMarqueeDir.current * 1.4;
+      if (next >= max) {
+        node.scrollLeft = max;
+        branchMarqueeDir.current = -1;
+        return;
+      }
+      if (next <= 0) {
+        node.scrollLeft = 0;
+        branchMarqueeDir.current = 1;
+        return;
+      }
+      node.scrollLeft = next;
+    }, 16);
   }, []);
 
   useEffect(() => {
@@ -594,7 +634,10 @@ export default function App() {
       }
     } catch (err) {
       if (!active) return;
-      setError(err instanceof Error ? err.message : 'failed to load state');
+      const message = err instanceof Error ? err.message : 'failed to load state';
+      const isTransient = /non-JSON \(500\)|failed to read repository state|unexpected token|no response body/i.test(message);
+      if (isTransient && Date.now() < transientSuppressUntil.current) return;
+      setError(message);
     }
   }, [repoPath, withRepo]);
 
@@ -673,6 +716,8 @@ export default function App() {
     if (!target) return false;
     try {
       setBranchBusy(true);
+      setBranchSwitching(true);
+      transientSuppressUntil.current = Date.now() + 5000;
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -691,6 +736,7 @@ export default function App() {
       return false;
     } finally {
       setBranchBusy(false);
+      setBranchSwitching(false);
     }
   }
 
@@ -948,7 +994,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className={`${CLASSES.branch} flex items-center justify-between gap-2`}>
+          <div className={`${CLASSES.branch} grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
             <span ref={branchMenuRef} className="relative inline-flex min-w-0 max-w-full items-center gap-2">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <circle cx="6" cy="6" r="2" />
@@ -959,14 +1005,26 @@ export default function App() {
               </svg>
                 <button
                   type="button"
-                className="inline-flex min-w-0 max-w-full items-center gap-1 text-3xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
+                className="inline-flex min-w-0 max-w-full flex-1 items-center gap-1 text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
                 disabled={branchBusy}
                 onClick={() => {
                   setBranchMenuOpen((v) => !v);
                   fetchBranches(true);
                 }}
               >
-                <span className="block min-w-0 max-w-[min(70vw,560px)] truncate">{state.branch}</span>
+                <span
+                  ref={branchScrollRef}
+                  className="hide-scrollbar block min-w-0 w-[60vw] max-w-[60vw] overflow-x-auto whitespace-nowrap"
+                  onMouseEnter={startBranchMarquee}
+                  onMouseLeave={() => stopBranchMarquee(true)}
+                >
+                  {state.branch}
+                </span>
+                {branchSwitching ? (
+                  <span className="inline-flex h-5 w-5 items-center justify-center">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent dark:border-slate-500 dark:border-t-transparent" />
+                  </span>
+                ) : null}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 transition-transform ${branchMenuOpen ? 'rotate-180' : ''}`}>
                   <path d="m6 9 6 6 6-6" />
                 </svg>
@@ -1026,7 +1084,7 @@ export default function App() {
             </span>
             <button
               type="button"
-              className="group inline-flex h-14 w-fit rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
+              className="group inline-flex h-14 w-fit shrink-0 rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
               disabled={busyAction !== null || branchBusy || !canPull}
               onClick={runPull}
             >
