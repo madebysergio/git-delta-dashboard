@@ -729,6 +729,8 @@ export default function App() {
       await fetchBranches(true);
       setBranchInput('');
       showToast(create ? `Created and switched to ${target}` : `Switched to ${target}`);
+      const nextState = payload?.state as RepoState | undefined;
+      if (!create && nextState?.counts?.behind > 0) showToast('Branch is behind. Pull latest when ready.');
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'checkout failed');
