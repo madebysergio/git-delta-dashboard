@@ -614,6 +614,11 @@ app.post('/api/push', async (req: Request, res: Response) => {
   const target = resolveTarget(req);
   try {
     await runGitCommand(target, ['push']);
+    try {
+      await runGitCommand(target, ['fetch', '--prune', 'origin']);
+    } catch {
+      // Keep push successful even if fetch refresh fails.
+    }
     const state = await getRepoState(target);
     res.json({ ok: true, state });
   } catch (error) {
