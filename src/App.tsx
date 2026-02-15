@@ -58,7 +58,7 @@ const CLASSES = {
   err: 'm-0 p-4 text-base text-red-600 dark:text-red-400'
   ,
   toastWrap: 'pointer-events-none absolute inset-x-0 z-30 flex flex-col gap-2 px-4 sm:px-5',
-  toast: 'pointer-events-auto inline-flex h-10 w-full items-center justify-between rounded-full border border-emerald-600 bg-emerald-600/95 px-4 text-xs font-semibold uppercase tracking-wide text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.16),0_1px_3px_rgba(15,23,42,0.12)] backdrop-blur transition-all duration-200 dark:border-emerald-400 dark:bg-emerald-400/95 dark:text-white',
+  toast: 'pointer-events-auto relative inline-flex min-h-10 w-full cursor-pointer items-start rounded-2xl border border-emerald-600 bg-emerald-600/95 px-4 py-2 pr-12 text-xs font-semibold uppercase tracking-wide text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.16),0_1px_3px_rgba(15,23,42,0.12)] backdrop-blur transition-all duration-200 dark:border-emerald-400 dark:bg-emerald-400/95 dark:text-white',
   toastClose: 'ml-3 inline-flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors duration-200 hover:bg-emerald-500 active:bg-emerald-700 hover:text-white dark:text-white dark:hover:bg-emerald-300 dark:active:bg-emerald-500 dark:hover:text-white'
 };
 
@@ -388,7 +388,7 @@ export default function App() {
   const [repoInput, setRepoInput] = useState('');
   const [repoMenuOpen, setRepoMenuOpen] = useState(false);
   const [commitFilter, setCommitFilter] = useState<'all' | 'pushed' | 'unpushed'>('all');
-  const [toasts, setToasts] = useState<Array<{ id: number; message: string; leaving?: boolean }>>([]);
+  const [toasts, setToasts] = useState<Array<{ id: number; message: string; tone: 'success' | 'error'; expanded?: boolean; leaving?: boolean }>>([]);
   const [toastBottom, setToastBottom] = useState(8);
   const toastTimers = useRef<Map<number, number>>(new Map());
   const toastId = useRef(1);
@@ -403,9 +403,9 @@ export default function App() {
   const branchMarqueeDir = useRef<1 | -1>(1);
   const transientSuppressUntil = useRef(0);
 
-  const showToast = useCallback((message: string, ttlMs = 4600) => {
+  const showToast = useCallback((message: string, ttlMs = 4600, tone: 'success' | 'error' = 'success') => {
     const id = toastId.current++;
-    setToasts((prev) => [...prev, { id, message, leaving: false }]);
+    setToasts((prev) => [...prev, { id, message, tone, expanded: false, leaving: false }]);
     const t = window.setTimeout(() => {
       setToasts((prev) => prev.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
       const t2 = window.setTimeout(() => {
@@ -453,6 +453,27 @@ export default function App() {
       toastTimers.current.delete(id);
     }
     setToasts((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+
+  const pauseToast = useCallback((id: number) => {
+    const t = toastTimers.current.get(id);
+    if (!t) return;
+    window.clearTimeout(t);
+    toastTimers.current.delete(id);
+    setToasts((prev) => prev.map((x) => (x.id === id ? { ...x, leaving: false } : x)));
+  }, []);
+
+  const resumeToast = useCallback((id: number, ttlMs = 2200) => {
+    if (toastTimers.current.has(id)) return;
+    const t = window.setTimeout(() => {
+      setToasts((prev) => prev.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
+      const t2 = window.setTimeout(() => {
+        setToasts((prev) => prev.filter((x) => x.id !== id));
+        toastTimers.current.delete(id);
+      }, 240);
+      toastTimers.current.set(id, t2);
+    }, ttlMs);
+    toastTimers.current.set(id, t);
   }, []);
 
   useEffect(() => {
@@ -681,7 +702,7 @@ export default function App() {
     };
   }, [withRepo]);
 
-  if (error) {
+  if (error && !state) {
     return (
       <section className={CLASSES.page}>
         <section className={CLASSES.frame}>
@@ -696,7 +717,12 @@ export default function App() {
     return (
       <section className={CLASSES.page}>
         <section className={CLASSES.frame}>
-          <div className={CLASSES.bar}>loading</div>
+          <div className={CLASSES.bar}>
+            <span className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent dark:border-slate-500 dark:border-t-transparent" />
+              {branchSwitching ? 'switching branch...' : 'loading'}
+            </span>
+          </div>
         </section>
       </section>
     );
@@ -733,8 +759,18 @@ export default function App() {
       if (!create && nextState?.counts?.behind > 0) showToast('Branch is behind. Pull latest when ready.');
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'checkout failed');
-      showToast('Branch action failed', 2200);
+      const reason = err instanceof Error ? err.message : 'checkout failed';
+      setError(reason);
+      const checkoutOverwrite = /would be overwritten by checkout/i.test(reason);
+      if (checkoutOverwrite) {
+        showToast(
+          'Branch switch failed: Please commit your changes or stash them before you switch branches. Aborting!',
+          4200,
+          'error'
+        );
+      } else {
+        showToast(`Branch switch failed: ${reason}`, 3200, 'error');
+      }
       return false;
     } finally {
       setBranchBusy(false);
@@ -759,8 +795,9 @@ export default function App() {
       showToast(`Deleted ${target}`);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'delete failed');
-      showToast('Branch delete failed', 2200);
+      const reason = err instanceof Error ? err.message : 'delete failed';
+      setError(reason);
+      showToast(`Branch delete failed: ${reason}`, 3200, 'error');
       return false;
     } finally {
       setBranchBusy(false);
@@ -813,8 +850,9 @@ export default function App() {
         showToast(`${payload.addedUntracked} untracked file(s) staged`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'action failed');
-      showToast('Action failed', 2200);
+      const reason = err instanceof Error ? err.message : 'action failed';
+      setError(reason);
+      showToast(`Action failed: ${reason}`, 3200, 'error');
     } finally {
       setBusyAction(null);
     }
@@ -835,8 +873,9 @@ export default function App() {
       await fetchState(true);
       showToast('Pull complete');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'pull failed');
-      showToast('Pull failed', 2200);
+      const reason = err instanceof Error ? err.message : 'pull failed';
+      setError(reason);
+      showToast(`Pull failed: ${reason}`, 3200, 'error');
     } finally {
       setBusyAction(null);
     }
@@ -856,8 +895,9 @@ export default function App() {
       await fetchState(true);
       showToast(stage ? 'File staged' : 'File unstaged');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'action failed');
-      showToast('Action failed', 2200);
+      const reason = err instanceof Error ? err.message : 'action failed';
+      setError(reason);
+      showToast(`Action failed: ${reason}`, 3200, 'error');
     } finally {
       setBusyFile(null);
     }
@@ -924,15 +964,46 @@ export default function App() {
         {toasts.length ? (
           <div className={CLASSES.toastWrap} style={{ bottom: `${toastBottom}px` }}>
             {toasts.map((t) => (
-              <div key={t.id} className={`${CLASSES.toast} ${t.leaving ? 'toast-leave' : ''}`}>
-                <span className="inline-flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="m8 12 2.5 2.5L16 9" />
-                  </svg>
-                  <span>{t.message}</span>
+              <div
+                key={t.id}
+                className={`${CLASSES.toast} ${t.tone === 'error' ? 'border-rose-600 bg-rose-600/95 dark:border-rose-500 dark:bg-rose-500/95' : ''} ${t.leaving ? 'toast-leave' : ''}`}
+                onMouseEnter={() => pauseToast(t.id)}
+                onMouseLeave={() => resumeToast(t.id)}
+                onClick={() => setToasts((prev) => prev.map((x) => (x.id === t.id ? { ...x, expanded: !x.expanded } : x)))}
+              >
+                <span className={`inline-flex min-w-0 gap-2 ${t.expanded ? 'items-start pt-0.5' : 'items-center'}`}>
+                  {t.tone === 'error' ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 8v5" />
+                      <path d="M12 16h.01" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="m8 12 2.5 2.5L16 9" />
+                    </svg>
+                  )}
+                  <span className={`min-w-0 ${t.expanded ? 'whitespace-normal break-words' : 'truncate whitespace-nowrap'}`}>
+                    {t.message.startsWith('Branch switch failed:') ? (
+                      <>
+                        <span className="font-bold">Branch switch failed:</span>
+                        <span>
+                          {t.message.slice('Branch switch failed:'.length).replace(' Aborting!', '')}
+                          {t.message.endsWith('Aborting!') ? <span className="font-bold"> Aborting!</span> : null}
+                        </span>
+                      </>
+                    ) : (
+                      t.message
+                    )}
+                  </span>
                 </span>
-                <button type="button" className={CLASSES.toastClose} onClick={() => closeToast(t.id)} aria-label="Close toast">
+                <button
+                  type="button"
+                  className={`${CLASSES.toastClose} absolute right-3 top-2 ${t.tone === 'error' ? 'hover:bg-rose-500 active:bg-rose-700 dark:hover:bg-rose-400 dark:active:bg-rose-600' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); closeToast(t.id); }}
+                  aria-label="Close toast"
+                >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                     <path d="M18 6 6 18" />
                     <path d="m6 6 12 12" />
@@ -996,8 +1067,8 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className={`${CLASSES.branch} grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
-            <span ref={branchMenuRef} className="relative inline-flex min-w-0 max-w-full items-center gap-2">
+          <div className={`${CLASSES.branch} grid min-w-0 grid-cols-[65%_1fr] items-center gap-3`}>
+            <span ref={branchMenuRef} className="relative inline-flex min-w-0 w-full items-center gap-3">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <circle cx="6" cy="6" r="2" />
                 <circle cx="18" cy="6" r="2" />
@@ -1007,7 +1078,7 @@ export default function App() {
               </svg>
                 <button
                   type="button"
-                className="inline-flex min-w-0 max-w-full flex-1 items-center gap-1 text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
+                className="inline-flex w-full min-w-0 items-center justify-between gap-2 text-2xl font-semibold tracking-tight text-slate-700 dark:text-slate-300"
                 disabled={branchBusy}
                 onClick={() => {
                   setBranchMenuOpen((v) => !v);
@@ -1016,7 +1087,7 @@ export default function App() {
               >
                 <span
                   ref={branchScrollRef}
-                  className="hide-scrollbar block min-w-0 w-[60vw] max-w-[60vw] overflow-x-auto whitespace-nowrap"
+                  className="hide-scrollbar block min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-left"
                   onMouseEnter={startBranchMarquee}
                   onMouseLeave={() => stopBranchMarquee(true)}
                 >
@@ -1086,17 +1157,19 @@ export default function App() {
             </span>
             <button
               type="button"
-              className="group inline-flex h-14 w-fit shrink-0 rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
+              className="group inline-flex h-14 w-full rounded-full border border-slate-400 bg-slate-100 px-4 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600"
               disabled={busyAction !== null || branchBusy || !canPull}
               onClick={runPull}
             >
-              <span className="inline-flex items-center gap-1.5">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                  <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8" />
-                  <path d="M21 3v5h-5" />
-                  <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
-                  <path d="M3 21v-5h5" />
-                </svg>
+              <span className="inline-flex w-full items-center justify-center gap-1.5">
+                <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8" />
+                    <path d="M21 3v5h-5" />
+                    <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
+                    <path d="M3 21v-5h5" />
+                  </svg>
+                </span>
                 <span>PULL</span>
               </span>
             </button>
@@ -1210,7 +1283,7 @@ export default function App() {
                   onClick={() => runAction('unstage')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <circle cx="6" cy="6" r="2.5" />
                         <circle cx="18" cy="12" r="2.5" />
@@ -1232,7 +1305,7 @@ export default function App() {
                   onClick={() => runAction('add')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
                         <path d="M14 3v5h5" />
@@ -1252,7 +1325,7 @@ export default function App() {
                   onClick={() => setCommitOpen(true)}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <line x1="4" y1="12" x2="20" y2="12" />
                         <circle cx="12" cy="12" r="3.5" />
@@ -1270,7 +1343,7 @@ export default function App() {
                   onClick={() => runAction('push')}
                 >
                   <span className="inline-flex items-center justify-center">
-                    <span className="mr-2 inline-flex w-4 items-center justify-center opacity-100 transition-all duration-200 group-disabled:opacity-0">
+                    <span className="mr-0 w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mr-2 group-hover:w-4 group-hover:opacity-100 group-disabled:mr-0 group-disabled:w-0 group-disabled:opacity-0 group-disabled:transition-none">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <circle cx="6" cy="12" r="2.5" />
                         <circle cx="18" cy="6" r="2.5" />
@@ -1424,8 +1497,9 @@ export default function App() {
                       await fetchRepos();
                       showToast('Repository cloned');
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : 'clone failed');
-                      showToast('Clone failed', 2200);
+                      const reason = err instanceof Error ? err.message : 'clone failed';
+                      setError(reason);
+                      showToast(`Clone failed: ${reason}`, 3200, 'error');
                     } finally {
                       setBranchBusy(false);
                     }
