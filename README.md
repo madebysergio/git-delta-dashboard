@@ -24,6 +24,7 @@ The interface is designed for quick scanning:
 - Expandable detail panes:
   - file lists for staged/unstaged/untracked
   - commit lists for ahead/behind with per-commit file mapping
+  - interactive commit tags for `push`, `uncommit`, and `unpush` (latest-commit safeguards)
 - Commits feed push-state indicators:
   - `READY FOR PUSH` for local unpushed commits
   - `PUSHED` for commits already on remote
@@ -133,6 +134,14 @@ Switches to an existing branch or creates + switches when requested.
 ### `POST /api/pull`
 
 Pulls latest changes for the current branch.
+
+### `POST /api/uncommit-latest`
+
+Undoes the latest local unpushed commit and restores its changes to staged state.
+
+### `POST /api/unpush-latest`
+
+Rewrites latest pushed commit off remote using `--force-with-lease` and restores its changes to staged state.
 
 ### `POST /api/repo-clone`
 

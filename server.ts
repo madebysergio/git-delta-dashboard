@@ -366,6 +366,7 @@ async function getRepoState(dir: string): Promise<{
   repository: string;
   repositoryPath: string;
   branch: string;
+  headOid: string;
   counts: { staged: number; modified: number; untracked: number; ahead: number; behind: number; recent: number };
   meta: { aheadMode: 'local' | 'upstream' };
   details: { staged: FileRow[]; modified: FileRow[]; untracked: UntrackedRow[]; ahead: CommitRow[]; behind: CommitRow[]; recent: CommitRow[] };
@@ -387,6 +388,7 @@ async function getRepoState(dir: string): Promise<{
     repository: repoName,
     repositoryPath: dir,
     branch,
+    headOid: recentCommits[0]?.oid || '',
     counts: {
       staged: staged.length,
       modified: modified.length,
@@ -407,6 +409,11 @@ async function getRepoState(dir: string): Promise<{
       recent: recentCommits
     }
   };
+}
+
+async function isHeadAheadCommit(dir: string, branch: string, headOid: string): Promise<boolean> {
+  const { aheadCommits } = await getAheadBehind(dir, branch);
+  return aheadCommits.some((c) => c.oid === headOid);
 }
 
 function getAssetVersion(): string {
@@ -652,6 +659,64 @@ app.post('/api/pull', async (req: Request, res: Response) => {
     res.json({ ok: true, state });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to pull changes' });
+  }
+});
+
+app.post('/api/uncommit-latest', async (req: Request, res: Response) => {
+  const target = resolveTarget(req);
+  const oid = typeof req.body?.oid === 'string' ? req.body.oid.trim() : '';
+  try {
+    const branch = await safeCurrentBranch(target);
+    const headOid = await git.resolveRef({ fs, dir: target, ref: 'HEAD' });
+    if (!headOid) {
+      res.status(400).json({ error: 'No HEAD commit to uncommit' });
+      return;
+    }
+    if (oid && oid !== headOid) {
+      res.status(400).json({ error: 'Only latest commit can be uncommitted' });
+      return;
+    }
+    const isAhead = await isHeadAheadCommit(target, branch, headOid);
+    if (!isAhead) {
+      res.status(400).json({ error: 'Latest commit is already pushed. Use unpush instead.' });
+      return;
+    }
+    await runGitCommand(target, ['reset', '--soft', 'HEAD~1']);
+    const state = await getRepoState(target);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to uncommit latest commit' });
+  }
+});
+
+app.post('/api/unpush-latest', async (req: Request, res: Response) => {
+  const target = resolveTarget(req);
+  const oid = typeof req.body?.oid === 'string' ? req.body.oid.trim() : '';
+  try {
+    const branch = await safeCurrentBranch(target);
+    const headOid = await git.resolveRef({ fs, dir: target, ref: 'HEAD' });
+    if (!headOid) {
+      res.status(400).json({ error: 'No HEAD commit to unpush' });
+      return;
+    }
+    if (oid && oid !== headOid) {
+      res.status(400).json({ error: 'Only latest commit can be unpushed' });
+      return;
+    }
+    const isAhead = await isHeadAheadCommit(target, branch, headOid);
+    if (isAhead) {
+      res.status(400).json({ error: 'Latest commit is not pushed yet. Use uncommit instead.' });
+      return;
+    }
+    await runGitCommand(target, ['reset', '--soft', 'HEAD~1']);
+    await runGitCommand(target, ['push', '--force-with-lease']);
+    try {
+      await runGitCommand(target, ['fetch', '--prune', 'origin']);
+    } catch {}
+    const state = await getRepoState(target);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to unpush latest commit' });
   }
 });
 

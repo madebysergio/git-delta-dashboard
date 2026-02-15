@@ -32,7 +32,7 @@ const CLASSES = {
   modalRow: 'mt-3 flex flex-col gap-2',
   countersWrap: 'relative overflow-hidden border-b border-slate-200 dark:border-slate-800',
   counters: 'flex gap-2 overflow-x-auto px-4 py-3 sm:px-5',
-  counter: 'group shrink-0 grid min-w-[146px] grid-cols-[28px_40px_1fr] items-center rounded-full border border-slate-300 bg-slate-100 px-5 py-2.5 text-left transition-colors duration-200 enabled:hover:border-slate-400 enabled:hover:bg-slate-50 enabled:active:bg-slate-200 disabled:cursor-default disabled:opacity-55 dark:border-slate-700 dark:bg-slate-800/90 dark:enabled:hover:border-slate-600 dark:enabled:hover:bg-slate-700/70 dark:enabled:active:bg-slate-700 sm:min-w-[160px]',
+  counter: 'group shrink-0 grid min-w-[146px] grid-cols-[28px_40px_1fr] items-center rounded-full border border-slate-300 bg-slate-100 px-5 py-2.5 text-left transition-[width,min-width,max-width,flex-basis,padding,background-color,border-color,color,box-shadow] duration-250 ease-out enabled:hover:border-slate-400 enabled:hover:bg-slate-50 enabled:active:bg-slate-200 disabled:cursor-default disabled:opacity-55 dark:border-slate-700 dark:bg-slate-800/90 dark:enabled:hover:border-slate-600 dark:enabled:hover:bg-slate-700/70 dark:enabled:active:bg-slate-700 sm:min-w-[160px]',
   counterActive: '!border-amber-500 !bg-amber-500 !text-white ring-2 ring-amber-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-amber-400 dark:!text-white dark:ring-0',
   counterUntracked: '!border-fuchsia-600 !bg-fuchsia-600 !text-white ring-2 ring-fuchsia-200 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.2),0_1px_4px_rgba(15,23,42,0.12)] dark:!border-slate-600 dark:!bg-fuchsia-400 dark:!text-white dark:ring-0',
   counterCommits: '!border-emerald-500 !bg-emerald-500 !text-white ring-0 shadow-none dark:!border-slate-600 dark:!bg-emerald-500 dark:!text-white dark:ring-0',
@@ -179,9 +179,9 @@ function FileRow({
   disabled: boolean;
 }) {
   const chipClass = status === 'staged'
-    ? 'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold tracking-wide text-amber-700 ring-1 ring-amber-300 transition-colors duration-200 hover:bg-amber-50 active:bg-amber-100 dark:text-amber-300 dark:ring-amber-700 dark:hover:bg-amber-900/30 dark:active:bg-amber-900/50'
+    ? 'group inline-flex w-[10rem] items-center justify-center gap-1.5 overflow-hidden rounded-full border border-amber-400 bg-amber-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-amber-800 transition-colors duration-200 ease-out hover:bg-amber-200/80 disabled:cursor-default dark:border-amber-500 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50'
     : status === 'unstaged'
-      ? 'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold tracking-wide text-rose-700 ring-1 ring-rose-300 transition-colors duration-200 hover:bg-rose-50 active:bg-rose-100 dark:text-rose-300 dark:ring-rose-700 dark:hover:bg-rose-900/30 dark:active:bg-rose-900/50'
+      ? 'group inline-flex w-[10rem] items-center justify-center gap-1.5 overflow-hidden rounded-full border border-rose-400 bg-rose-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-rose-800 transition-colors duration-200 ease-out hover:bg-rose-200/80 disabled:cursor-default dark:border-rose-500 dark:bg-rose-900/30 dark:text-rose-200 dark:hover:bg-rose-900/50'
       : 'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold tracking-wide text-fuchsia-700 ring-1 ring-fuchsia-300 transition-colors duration-200 hover:bg-fuchsia-50 active:bg-fuchsia-100 dark:text-fuchsia-300 dark:ring-fuchsia-700 dark:hover:bg-fuchsia-900/30 dark:active:bg-fuchsia-900/50';
 
   return (
@@ -205,7 +205,19 @@ function FileRow({
               <path d="M8.5 16.8 15.5 13.2" />
             </svg>
           )}
-          <span>{status.toUpperCase()}</span>
+          {status === 'staged' ? (
+            <>
+              <span className="group-hover:hidden">STAGED</span>
+              <span className="hidden group-hover:inline">UNSTAGE</span>
+            </>
+          ) : status === 'unstaged' ? (
+            <>
+              <span className="group-hover:hidden">UNSTAGED</span>
+              <span className="hidden group-hover:inline">STAGE</span>
+            </>
+          ) : (
+            <span>{status.toUpperCase()}</span>
+          )}
         </button>
         <span className={CLASSES.file}>{item.file}</span>
       </span>
@@ -217,7 +229,29 @@ function FileRow({
   );
 }
 
-function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; pushed: boolean }) {
+function CommitRow({
+  item,
+  nowMs,
+  pushed,
+  canPush,
+  canUncommit,
+  canUnpush,
+  busy,
+  onPush,
+  onUncommit,
+  onUnpush
+}: {
+  item: CommitDelta;
+  nowMs: number;
+  pushed: boolean;
+  canPush: boolean;
+  canUncommit: boolean;
+  canUnpush: boolean;
+  busy: boolean;
+  onPush: () => void;
+  onUncommit: () => void;
+  onUnpush: () => void;
+}) {
   const committedWhen = formatCommitWhen(item.ts, nowMs);
   const hasManyFiles = (item.files?.length || 0) >= 4;
   const [open, setOpen] = useState(false);
@@ -231,15 +265,44 @@ function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; 
       <span className={CLASSES.commitBlock}>
         <span className={CLASSES.commitTagLine}>
           <span className="inline-flex items-center gap-2">
-            <span className="inline-flex self-start items-center gap-1.5 rounded-full border border-emerald-400 bg-emerald-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-200">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
-                <line x1="4" y1="12" x2="20" y2="12" />
-                <circle cx="12" cy="12" r="3.5" />
-              </svg>
-              COMMITTED
-            </span>
             {pushed ? (
-              <span className="inline-flex self-start items-center gap-1.5 rounded-full border border-violet-400 bg-violet-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-500 dark:bg-violet-900/30 dark:text-violet-200">
+              <span className="inline-flex w-[10.25rem] self-start items-center justify-center gap-1.5 overflow-hidden rounded-full border border-emerald-400 bg-emerald-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 opacity-60 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-200">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <circle cx="12" cy="12" r="3.5" />
+                </svg>
+                COMMITTED
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={!canUncommit || busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canUncommit || busy) return;
+                  onUncommit();
+                }}
+                className="group inline-flex w-[10.25rem] self-start items-center justify-center gap-1.5 overflow-hidden rounded-full border border-emerald-400 bg-emerald-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 transition-colors duration-200 ease-out hover:bg-emerald-200/80 disabled:cursor-default dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                title={canUncommit ? 'Undo latest local commit to staged changes' : 'Only latest unpushed commit can be uncommitted'}
+              >
+                <span className="inline-flex items-center gap-1.5 group-hover:hidden">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <circle cx="12" cy="12" r="3.5" />
+                  </svg>
+                  COMMITTED
+                </span>
+                <span className="hidden items-center gap-1.5 group-hover:inline-flex">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <circle cx="12" cy="12" r="3.5" />
+                  </svg>
+                  UNCOMMIT
+                </span>
+              </button>
+            )}
+            {pushed ? (
+              <span className="inline-flex w-[8.5rem] self-start items-center justify-center gap-1.5 overflow-hidden rounded-full border border-violet-400 bg-violet-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-violet-700 opacity-60 dark:border-violet-500 dark:bg-violet-900/30 dark:text-violet-200">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
                   <path d="M12 19V5" />
                   <path d="m7 10 5-5 5 5" />
@@ -247,14 +310,34 @@ function CommitRow({ item, nowMs, pushed }: { item: CommitDelta; nowMs: number; 
                 PUSHED
               </span>
             ) : (
-              <span className="inline-flex self-start items-center gap-1.5 rounded-full border border-amber-400 bg-amber-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-500 dark:bg-amber-900/30 dark:text-amber-200">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
-                  <path d="M12 9v4" />
-                  <path d="M12 17h.01" />
-                  <circle cx="12" cy="12" r="9" />
-                </svg>
-                READY FOR PUSH
-              </span>
+              <button
+                type="button"
+                disabled={!canPush || busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canPush || busy) return;
+                  onPush();
+                }}
+                className="group inline-flex w-[11rem] self-start items-center justify-center gap-1.5 overflow-hidden rounded-full border border-amber-400 bg-amber-100/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-amber-800 transition-colors duration-200 ease-out hover:bg-amber-200/80 disabled:cursor-default dark:border-amber-500 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                title={canPush ? 'Push local commits' : 'Nothing to push'}
+              >
+                <span className="inline-flex items-center gap-1.5 group-hover:hidden">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                  READY FOR PUSH
+                </span>
+                <span className="hidden items-center gap-1.5 group-hover:inline-flex">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                  PUSH NOW
+                </span>
+              </button>
             )}
           </span>
           <span className="inline-flex items-center gap-2 rounded-full border border-slate-500 px-3 py-2.5 text-xs font-semibold tracking-wide text-slate-200 dark:border-slate-500 dark:text-slate-200">
@@ -366,7 +449,7 @@ export default function App() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
-  const [busyAction, setBusyAction] = useState<'add' | 'unstage' | 'commit' | 'push' | 'pull' | null>(null);
+  const [busyAction, setBusyAction] = useState<'add' | 'unstage' | 'commit' | 'push' | 'pull' | 'uncommit' | 'unpush' | null>(null);
   const [busyFile, setBusyFile] = useState<string | null>(null);
   const [branchBusy, setBranchBusy] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
@@ -881,6 +964,52 @@ export default function App() {
     }
   }
 
+  async function runUncommitLatest(oid: string) {
+    try {
+      setBusyAction('uncommit');
+      setError('');
+      showToast('Uncommitting latest commit...');
+      const res = await fetch('/api/uncommit-latest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyWithRepo({ oid }))
+      });
+      const payload = await parseJsonOrThrow(res);
+      if (!res.ok) throw new Error(payload.error || 'uncommit failed');
+      await fetchState(true);
+      showToast('Uncommitted to staged changes');
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'uncommit failed';
+      setError(reason);
+      showToast(`Uncommit failed: ${reason}`, 3200, 'error');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function runUnpushLatest(oid: string) {
+    try {
+      setBusyAction('unpush');
+      setError('');
+      showToast('Unpushing latest commit...');
+      const res = await fetch('/api/unpush-latest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyWithRepo({ oid }))
+      });
+      const payload = await parseJsonOrThrow(res);
+      if (!res.ok) throw new Error(payload.error || 'unpush failed');
+      await fetchState(true);
+      showToast('Unpushed and moved commit back to staged');
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'unpush failed';
+      setError(reason);
+      showToast(`Unpush failed: ${reason}`, 3200, 'error');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function toggleFileStage(file: string, stage: boolean) {
     try {
       setBusyFile(file);
@@ -952,11 +1081,41 @@ export default function App() {
         ? pushedOnly
         : [...unpushedOnly, ...pushedOnly];
 
+    const headOid = state.headOid || '';
     detailRows = selected.map((item) => (
-      <CommitRow item={item} nowMs={nowMs} pushed={!aheadSet.has(item.oid)} key={item.oid} />
+      <CommitRow
+        item={item}
+        nowMs={nowMs}
+        pushed={!aheadSet.has(item.oid)}
+        canPush={!aheadSet.has(item.oid) ? false : state.counts.ahead > 0}
+        canUncommit={aheadSet.has(item.oid) && item.oid === headOid}
+        canUnpush={!aheadSet.has(item.oid) && item.oid === headOid}
+        busy={busyAction !== null}
+        onPush={() => runAction('push')}
+        onUncommit={() => runUncommitLatest(item.oid)}
+        onUnpush={() => runUnpushLatest(item.oid)}
+        key={item.oid}
+      />
     ));
   }
-  if (expanded === 'behind') detailRows = state.details.behind.map((item) => <CommitRow item={item} nowMs={nowMs} pushed={true} key={item.oid} />);
+  if (expanded === 'behind') {
+    const headOid = state.headOid || '';
+    detailRows = state.details.behind.map((item) => (
+      <CommitRow
+        item={item}
+        nowMs={nowMs}
+        pushed={true}
+        canPush={false}
+        canUncommit={false}
+        canUnpush={item.oid === headOid}
+        busy={busyAction !== null}
+        onPush={() => runAction('push')}
+        onUncommit={() => runUncommitLatest(item.oid)}
+        onUnpush={() => runUnpushLatest(item.oid)}
+        key={item.oid}
+      />
+    ));
+  }
 
   return (
     <section className={CLASSES.page}>

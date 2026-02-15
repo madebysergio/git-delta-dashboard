@@ -17,6 +17,7 @@ export type RepoState = {
   repository: string;
   repositoryPath?: string;
   branch: string;
+  headOid?: string;
   counts: {
     staged: number;
     modified: number;
