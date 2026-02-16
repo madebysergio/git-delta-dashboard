@@ -470,6 +470,11 @@ app.post('/api/checkout', async (req: Request, res: Response) => {
     } else {
       await runGitCommand(target, ['checkout', branch]);
     }
+    try {
+      await runGitCommand(target, ['fetch', '--prune', 'origin']);
+    } catch {
+      // Keep branch switch successful even if remote refresh fails.
+    }
     const state = await getRepoState(target);
     res.json({ ok: true, state });
   } catch (error) {
