@@ -21,6 +21,7 @@ const CLASSES = {
   actions: 'border-b border-slate-200 dark:border-slate-800',
   actionFooter: 'border-t border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5',
   actionBtn: 'cursor-pointer rounded-full border border-slate-400 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600',
+  sortBtn: 'cursor-pointer inline-flex min-w-[146px] items-center justify-center rounded-full border border-slate-400 bg-slate-100 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600 sm:min-w-[160px]',
   actionBtnFull: 'group cursor-pointer h-14 w-full rounded-full border border-slate-400 bg-slate-100 px-3 text-xs font-semibold uppercase tracking-wide text-slate-800 transition-colors duration-200 enabled:hover:bg-slate-200 enabled:active:bg-slate-300 disabled:cursor-default disabled:opacity-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:enabled:hover:bg-slate-700 dark:enabled:active:bg-slate-600',
   actionBtnCommit: 'group cursor-pointer h-14 w-full rounded-full border border-sky-400 bg-sky-100 px-3 text-xs font-semibold uppercase tracking-wide text-sky-900 transition-colors duration-200 enabled:hover:bg-sky-200 enabled:active:bg-sky-300 disabled:cursor-default disabled:opacity-50 dark:border-sky-500 dark:bg-sky-700 dark:text-white dark:enabled:hover:bg-sky-600 dark:enabled:active:bg-sky-500',
   actionBtnPush: 'group cursor-pointer h-14 w-full rounded-full border border-violet-500 bg-violet-500/75 px-3 text-xs font-semibold uppercase tracking-wide text-white transition-colors duration-200 enabled:hover:bg-violet-500 enabled:hover:text-white enabled:active:bg-violet-600 enabled:active:text-white disabled:cursor-default disabled:opacity-50 dark:border-violet-500 dark:bg-violet-600/75 dark:text-white dark:enabled:hover:bg-violet-500 dark:enabled:hover:text-white dark:enabled:active:bg-violet-400 dark:enabled:active:text-white',
@@ -1410,7 +1411,7 @@ export default function App() {
                 </span>
                 <button
                   type="button"
-                  className={`${CLASSES.actionBtn} ${commitFilter === 'all' ? 'bg-slate-200 opacity-70 hover:bg-slate-200 active:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-900 dark:active:bg-slate-900' : ''}`}
+                  className={`${CLASSES.sortBtn} ${commitFilter === 'all' ? 'bg-slate-200 opacity-70 hover:bg-slate-200 active:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-900 dark:active:bg-slate-900' : ''}`}
                   onClick={() => setCommitFilter((p) => (p === 'all' ? 'unpushed' : p === 'unpushed' ? 'pushed' : 'all'))}
                 >
                   <span className={`inline-flex items-center gap-1.5 ${commitFilter === 'all' ? 'opacity-80' : ''}`}>
